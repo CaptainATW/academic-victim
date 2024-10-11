@@ -6,12 +6,18 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Set up OpenAI client
-client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    print("Error: OPENAI_API_KEY not found in environment variables.")  # Debugging: Check if API key is loaded
+else:
+    print(f"API Key loaded: {api_key[:5]}...")  # Debugging: Print the first few characters of the API key
 
-async def stream_gpt4_response(prompt):
+client = AsyncOpenAI(api_key=api_key)
+
+async def stream_gpt4_response(prompt, model="gpt-4o-mini"):
     try:
         stream = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=model,  # Use the model passed from the popup
             messages=[{"role": "user", "content": prompt}],
             stream=True
         )
