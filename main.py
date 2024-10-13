@@ -8,6 +8,7 @@ from ai import stream_gpt4_response  # Import from ai.py
 from PIL import ImageGrab  # For taking screenshots
 from pynput import mouse, keyboard  # For capturing mouse and keyboard events
 import platform
+from datetime import datetime
 
 # Load environment variables
 load_dotenv()
@@ -21,6 +22,18 @@ class PopupWindow:
         master.attributes("-topmost", True)  # Always on top
         master.geometry("500x220+100+100")  # Adjusted height to accommodate the smaller top bar
 
+        # Create text_area first
+        self.text_area = scrolledtext.ScrolledText(master, wrap=tk.WORD, width=40, height=10)
+        self.text_area.pack(expand=True, fill='both')
+
+        # Check if the API key is set
+        self.api_key = os.getenv("OPENAI_API_KEY")
+        self.api_key_set = bool(self.api_key)
+
+        # If API key is not set, display a message
+        if not self.api_key_set:
+            self.display_api_key_message()
+
         # Top bar frame (hidden by default)
         self.top_bar = tk.Frame(master, height=30)
         self.top_bar.pack(fill=tk.X)
@@ -28,24 +41,26 @@ class PopupWindow:
 
         # Button styling (black background, white text, no padding, and black when focused)
         button_style = {
-            "width": 2,  # Square buttons for "Close" and "Copy"
+            #"width": 2,  # Square buttons for "Close" and "Copy"
             "height": 1,
             "relief": tk.FLAT,  # No border
             "bg": "gray",  # Black background
             "fg": "black",  # White text
+            "highlightcolor": "gray",
             "highlightthickness": 0,  # Remove highlight border (important for macOS)
         }
 
+        # Add the "acedemic weapon" label
+        self.label = tk.Label(self.top_bar, text="academic victim", fg="white")
+        self.label.pack(side=tk.LEFT, padx=5, pady=(0, 5))  # Added vertical padding for centering
+
         # Close button (square)
         self.close_button = tk.Button(self.top_bar, text="X", command=self.close_window, **button_style)
-        self.close_button.pack(side=tk.LEFT, padx=0, pady=0)  # No padding
+        self.close_button.pack(side=tk.RIGHT, padx=(0, 5), pady=(0, 5))  # No padding
 
         # Copy button (square)
         self.copy_button = tk.Button(self.top_bar, text="C", command=self.copy_last_response, **button_style)
-        self.copy_button.pack(side=tk.LEFT, padx=0, pady=0)  # No padding
-
-        # Track the start of the assistant's response
-        self.response_start_index = None
+        self.copy_button.pack(side=tk.RIGHT, padx=0, pady=(0, 5))  # No padding
 
         # Model button (adjust width based on text length)
         self.model_options = ["gpt-4o", "chatgpt-4o-latest", "gpt-4o-mini"]
@@ -53,11 +68,10 @@ class PopupWindow:
         model_text = f"Model: {self.model_options[self.current_model_index]}"
         self.model_button = tk.Button(self.top_bar, text=model_text, command=self.cycle_model, **button_style)
         self.model_button.config(width=len(model_text))  # Set width based on text length
-        self.model_button.pack(side=tk.LEFT, padx=0, pady=0)  # No padding
+        self.model_button.pack(side=tk.RIGHT, padx=0, pady=(0, 5))  # No padding
 
-        # Text area for displaying responses
-        self.text_area = scrolledtext.ScrolledText(master, wrap=tk.WORD, width=40, height=10)
-        self.text_area.pack(expand=True, fill='both')
+        # Track the start of the assistant's response
+        self.response_start_index = None
 
         # Disable text selection
         self.text_area.bind("<Button-1>", lambda event: "break")
@@ -101,11 +115,8 @@ class PopupWindow:
         self.last_response += text  # Append to last response
 
     def close_window(self):
-        # Unbind the event handlers before closing the window
-        self.master.unbind("<B1-Motion>")
-        self.master.unbind("<ButtonRelease-1>")
-        self.master.destroy()  # Properly close the window
-        os._exit(0)  # Forcefully exit the Python program
+        self.master.destroy()  # Close the window
+        os._exit(0)  # Exit the program
 
     def copy_last_response(self):
         if self.response_start_index:
@@ -233,8 +244,15 @@ class PopupWindow:
         # Convert the image to RGB mode (JPEG does not support RGBA)
         screenshot = screenshot.convert("RGB")
         
+        # Create the images/ directory if it doesn't exist
+        if not os.path.exists("images"):
+            os.makedirs("images")
+        
+        # Generate the filename with the current timestamp
+        timestamp = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
+        screenshot_path = f"images/screenshot_{timestamp}.jpg"
+        
         # Save the screenshot as a JPEG
-        screenshot_path = "screenshot.jpg"
         screenshot.save(screenshot_path)
 
         # Use the stored event loop to schedule the coroutine
@@ -247,6 +265,38 @@ class PopupWindow:
             self.update_text(response_chunk)
             self.master.update()
         self.update_text("\n\n")
+
+    def display_api_key_message(self):
+        """Display a message prompting the user to provide an OpenAI API key."""
+        self.text_area.insert(tk.END, "Thanks for installing academic victim.\n")
+        self.text_area.insert(tk.END, "You need an OpenAI API key to use this.\n")
+        self.text_area.insert(tk.END, "Please copy your API key (it should start with 'sk-').\n")
+        self.text_area.see(tk.END)
+
+    async def check_for_api_key(self):
+        """Check the clipboard for a valid OpenAI API key and update the .env file if found."""
+        last_clipboard = pyperclip.paste()  # Initialize with current clipboard content
+        while not self.api_key_set:
+            current_clipboard = pyperclip.paste()
+            if current_clipboard != last_clipboard and current_clipboard.startswith("sk-") and len(current_clipboard) > 30:
+                # Valid API key found
+                self.api_key = current_clipboard
+                self.api_key_set = True
+                self.update_env_file(self.api_key)
+                self.text_area.insert(tk.END, "API key detected and saved.\n")
+                self.text_area.insert(tk.END, "Please restart the program to use the new API key.\n")
+                self.text_area.insert(tk.END, "The program will close in 3 seconds.\n")
+                self.text_area.see(tk.END)
+                await asyncio.sleep(3)  # Wait for 3 seconds
+                self.close_window()  # Close the window
+            last_clipboard = current_clipboard
+            await asyncio.sleep(1)  # Check every second
+
+    def update_env_file(self, api_key):
+        """Write the API key to the .env file."""
+        with open(".env", "a") as env_file:
+            env_file.write(f"\nOPENAI_API_KEY={api_key}\n")
+        print(f"API key saved to .env: {api_key[:5]}...")  # Debugging: Print the first few characters of the API key
 
 async def check_clipboard(popup):
     last_clipboard = pyperclip.paste()  # Initialize with current clipboard content
@@ -267,7 +317,12 @@ async def main():
     loop = asyncio.get_event_loop()  # Get the main event loop
     popup = PopupWindow(root, loop)  # Pass the event loop to PopupWindow
 
-    clipboard_task = asyncio.create_task(check_clipboard(popup))
+    if not popup.api_key_set:
+        # Start the task to check for the API key if it's not set
+        api_key_task = asyncio.create_task(popup.check_for_api_key())
+    else:
+        # Start the clipboard task if the API key is already set
+        clipboard_task = asyncio.create_task(check_clipboard(popup))
 
     try:
         while True:
@@ -276,7 +331,10 @@ async def main():
     except tk.TclError:
         print("Window closed")
     finally:
-        clipboard_task.cancel()
+        if not popup.api_key_set:
+            api_key_task.cancel()
+        else:
+            clipboard_task.cancel()
 
 if __name__ == "__main__":
     asyncio.run(main())

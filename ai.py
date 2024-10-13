@@ -7,15 +7,21 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Set up OpenAI client
-api_key = os.getenv("OPENAI_API_KEY").strip()  # Strip any extra spaces or newlines
-if not api_key:
-    print("Error: OPENAI_API_KEY not found in environment variables.")  # Debugging: Check if API key is loaded
+api_key = os.getenv("OPENAI_API_KEY")  # Get the API key from the environment
+
+if api_key:
+    api_key = api_key.strip()  # Strip any extra spaces or newlines
+    print(f"API Key loaded: {api_key[:5]}...")  # Debugging: Print the first few characters of the API key
+    client = AsyncOpenAI(api_key=api_key)
 else:
-    print(f"API Key loaded: {api_key}...")  # Debugging: Print the first few characters of the API key
+    print("Error: OPENAI_API_KEY not found in environment variables.")  # Debugging: Check if API key is loaded
+    client = None  # Set client to None if no API key is found
 
-client = AsyncOpenAI(api_key=api_key)
+async def stream_gpt4_response(prompt=None, image_path=None, model="gpt-4o-mini"):
+    if not client:
+        yield "Error: No API key found. Please provide a valid OpenAI API key."
+        return
 
-async def stream_gpt4_response(prompt=None, image_path=None, model="gpt-4o-mini"):  # Changed model to gpt-4o-mini
     try:
         if image_path:
             # Encode the image to base64

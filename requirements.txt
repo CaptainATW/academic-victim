@@ -1,0 +1,7 @@
+asyncio
+pyperclip
+tkinter
+Pillow
+pynput
+openai
+dotenv
