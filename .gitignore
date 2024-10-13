@@ -1,4 +1,5 @@
-.env
-
 .venv/
-__pycache__/screenshots.cpython-312.pyc
+.env
+.env
+/__pycache__
+/images

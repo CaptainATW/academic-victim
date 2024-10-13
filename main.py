@@ -4,14 +4,18 @@ import tkinter as tk
 from tkinter import scrolledtext
 import os
 from dotenv import load_dotenv
-from ai import stream_gpt4_response  # Import from openai.py
+from ai import stream_gpt4_response  # Import from ai.py
+from PIL import ImageGrab  # For taking screenshots
+from pynput import mouse, keyboard  # For capturing mouse and keyboard events
+import platform
 
 # Load environment variables
 load_dotenv()
 
 class PopupWindow:
-    def __init__(self, master):
+    def __init__(self, master, loop):
         self.master = master
+        self.loop = loop  # Store the main event loop
         master.overrideredirect(True)  # Remove window decorations
         master.attributes("-alpha", 0.9)  # Set transparency
         master.attributes("-topmost", True)  # Always on top
@@ -29,8 +33,6 @@ class PopupWindow:
             "relief": tk.FLAT,  # No border
             "bg": "gray",  # Black background
             "fg": "black",  # White text
-            #"activebackground": "black",  # Keep background black when focused
-            #"activeforeground": "black",  # Keep text white when focused
             "highlightthickness": 0,  # Remove highlight border (important for macOS)
         }
 
@@ -77,6 +79,18 @@ class PopupWindow:
         self.is_dragging = False
         self.last_response = ""  # Store the last response for copying
         self.ignore_clipboard = ""  # Flag to ignore clipboard changes after copying
+
+        # Initialize positions for screenshots
+        self.pos1 = None
+        self.pos2 = None
+
+        # Set up keyboard listener for screenshot commands
+        self.keyboard_listener = keyboard.Listener(on_press=self.on_key_press, on_release=self.on_key_release)
+        self.keyboard_listener.start()
+
+        # Detect if running on macOS
+        self.is_macos = platform.system() == "Darwin"
+        self.cmd_pressed = False  # Track if Command key is pressed
 
     def update_text(self, text):
         if "Processing new clipboard content..." in text:
@@ -152,6 +166,88 @@ class PopupWindow:
         """Hide the top bar."""
         self.top_bar.pack_forget()
 
+    def on_key_press(self, key):
+        """Handle keyboard shortcuts for marking positions and taking screenshots."""
+        try:
+            if self.is_macos:
+                # Track if Command key is pressed
+                if key == keyboard.Key.cmd:
+                    self.cmd_pressed = True
+                    print("Command key pressed")
+                elif self.cmd_pressed and key.char == '1':
+                    self.pos1 = self.get_mouse_position()
+                    print(f"POS1 set at {self.pos1}")
+                elif self.cmd_pressed and key.char == '2':
+                    self.pos2 = self.get_mouse_position()
+                    print(f"POS2 set at {self.pos2}")
+                elif self.cmd_pressed and key.char == '3':
+                    if self.pos1 and self.pos2:
+                        self.take_screenshot()
+                    else:
+                        print("Error: POS1 and POS2 must be set before taking a screenshot.")
+            else:
+                # Use Control key on other platforms
+                if key == keyboard.Key.ctrl_l:
+                    self.cmd_pressed = True
+                    print("Control key pressed")
+                elif self.cmd_pressed and key.char == '1':
+                    self.pos1 = self.get_mouse_position()
+                    print(f"POS1 set at {self.pos1}")
+                elif self.cmd_pressed and key.char == '2':
+                    self.pos2 = self.get_mouse_position()
+                    print(f"POS2 set at {self.pos2}")
+                elif self.cmd_pressed and key.char == '3':
+                    if self.pos1 and self.pos2:
+                        self.take_screenshot()
+                    else:
+                        print("Error: POS1 and POS2 must be set before taking a screenshot.")
+        except AttributeError:
+            pass
+
+    def on_key_release(self, key):
+        """Handle key release events."""
+        if self.is_macos and key == keyboard.Key.cmd:
+            self.cmd_pressed = False
+            print("Command key released")
+        elif not self.is_macos and key == keyboard.Key.ctrl_l:
+            self.cmd_pressed = False
+            print("Control key released")
+
+    def get_mouse_position(self):
+        """Get the current mouse position."""
+        with mouse.Controller() as controller:
+            return controller.position
+
+    def take_screenshot(self):
+        """Take a screenshot between POS1 and POS2 and send it to the AI."""
+        # Convert floating-point coordinates to integers
+        x1, y1 = map(int, self.pos1)
+        x2, y2 = map(int, self.pos2)
+        
+        # Define the bounding box for the screenshot
+        bbox = (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
+        
+        # Take the screenshot
+        screenshot = ImageGrab.grab(bbox)
+        
+        # Convert the image to RGB mode (JPEG does not support RGBA)
+        screenshot = screenshot.convert("RGB")
+        
+        # Save the screenshot as a JPEG
+        screenshot_path = "screenshot.jpg"
+        screenshot.save(screenshot_path)
+
+        # Use the stored event loop to schedule the coroutine
+        asyncio.run_coroutine_threadsafe(self.send_screenshot_to_ai(screenshot_path), self.loop)
+
+    async def send_screenshot_to_ai(self, screenshot_path):
+        """Send the screenshot to the AI and display the response."""
+        self.update_text("Processing screenshot...\n")
+        async for response_chunk in stream_gpt4_response(None, image_path=screenshot_path):
+            self.update_text(response_chunk)
+            self.master.update()
+        self.update_text("\n\n")
+
 async def check_clipboard(popup):
     last_clipboard = pyperclip.paste()  # Initialize with current clipboard content
     while True:
@@ -160,7 +256,7 @@ async def check_clipboard(popup):
             print("ignore clipboard here", popup.ignore_clipboard)
             last_clipboard = current_clipboard
             popup.update_text("Processing new clipboard content...\n")
-            async for response_chunk in stream_gpt4_response(current_clipboard, popup.model_options[popup.current_model_index]):
+            async for response_chunk in stream_gpt4_response(current_clipboard, None, popup.model_options[popup.current_model_index]):
                 popup.update_text(response_chunk)
                 popup.master.update()
             popup.update_text("\n\n")
@@ -168,7 +264,8 @@ async def check_clipboard(popup):
 
 async def main():
     root = tk.Tk()
-    popup = PopupWindow(root)
+    loop = asyncio.get_event_loop()  # Get the main event loop
+    popup = PopupWindow(root, loop)  # Pass the event loop to PopupWindow
 
     clipboard_task = asyncio.create_task(check_clipboard(popup))
 
