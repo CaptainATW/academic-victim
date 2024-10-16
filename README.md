@@ -1,15 +1,17 @@
-<img align="right" alt="logo" width="200px" src="https://www.hanksbelts.com/cdn/shop/products/a2700oak-1_0e0f7550-f2aa-45c8-9010-cd3d0fe235c9_1200x.jpg?v=1711550204" />
+<img align="right" alt="logo" width="200px" src="https://raw.githubusercontent.com/CaptainATW/academic-victim/refs/heads/main/icon.png" />
 
-# Academic Victim
+# academic victim
 
-If you're reading this, you're an **academic victim**.
+If you're reading this, thats probably what you look like ->
+
+this is a python app that extracts questions from clipboard text or images, then uses OpenAI models like gpt-4o to provide answers in a simple pop-up window.   
 
 ## Installation
 
 To install this project, you need to clone or download the repository. Unlike traditional executables, you will need to run the project from source.
 
 ### Requirements
-- You **will need an OpenAI API key** if you want to utilize GPT-4 or other OpenAI GPT models.
+- You **will need an OpenAI API key** if you want to utilize GPT-4o, or other OpenAI GPT models.
 
 ### Installation via GitHub Desktop and VSCode
 
@@ -29,14 +31,14 @@ To install this project, you need to clone or download the repository. Unlike tr
 4. In the command palette, search for and select `Python: Create Environment`.
 5. Choose:
    - `Venv > Create > Use Python 3.x`.
-   
-6. Once the environment is created, you'll need to install the required dependencies by running:
+
+6. Select "Install dependencies using requirements.txt" OR go make sure the environment is selected and run:
 
    ```bash
    pip install -r requirements.txt
    ```
 
-7. Now, you can run the main Python file by executing:
+8. Now, you can run the main Python file by executing:
 
    ```bash
    python main.py
