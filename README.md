@@ -1,8 +1,10 @@
 <img align="right" alt="logo" width="200px" src="https://raw.githubusercontent.com/CaptainATW/academic-victim/refs/heads/main/icon.png" />
 
-# Academic Victim
+# academic victim
 
 If you're reading this, thats probably what you look like ->
+
+Academic Victim is a python app that extracts questions from clipboard text or images, then uses OpenAI models like gpt-4o to provide answers in a simple pop-up window.   
 
 ## Installation
 
