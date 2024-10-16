@@ -92,11 +92,6 @@ class PopupWindow:
         # Track the start of the assistant's response
         self.response_start_index = None
 
-        # Disable text selection
-        
-        #self.text_area.bind("<Double-1>", lambda event: "break")
-        #self.text_area.config(state=tk.DISABLED)
-
         # Hide scrollbar
         self.text_area.pack_forget()
         self.text_area.pack(expand=True, fill='both')
@@ -273,23 +268,24 @@ class PopupWindow:
         screenshot = screenshot.convert("RGB")
         
         # Create the images/ directory if it doesn't exist
-        if not os.path.exists("images"):
-            os.makedirs("images")
+
+        #if not os.path.exists("images"):
+        #    os.makedirs("images")
         
         # Generate the filename with the current timestamp
-        timestamp = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
-        screenshot_path = f"images/screenshot_{timestamp}.jpg"
+        #timestamp = datetime.now().strftime("%m-%d-%Y_%H-%M-%S")
+        #screenshot_path = f"images/screenshot_{timestamp}.jpg"
         
         # Save the screenshot as a JPEG
-        screenshot.save(screenshot_path)
+        #screenshot.save(screenshot_path)
 
         # Use the stored event loop to schedule the coroutine
-        asyncio.run_coroutine_threadsafe(self.send_screenshot_to_ai(screenshot_path), self.loop)
+        asyncio.run_coroutine_threadsafe(self.send_screenshot_to_ai(screenshot), self.loop)
 
-    async def send_screenshot_to_ai(self, screenshot_path):
+    async def send_screenshot_to_ai(self, screenshot):
         """Send the screenshot to the AI and display the response."""
         self.update_text("Processing screenshot...\n")
-        async for response_chunk in stream_gpt4_response(prompt=None, image_path=screenshot_path, model=self.model_options[self.current_model_index]):
+        async for response_chunk in stream_gpt4_response(prompt=None, image=screenshot, model=self.model_options[self.current_model_index]):
             self.update_text(response_chunk)
             self.master.update()
         self.update_text("\n\n")

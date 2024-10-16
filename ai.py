@@ -2,6 +2,8 @@ import base64
 import os
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
+from PIL import Image
+from io import BytesIO
 
 # Load environment variables
 load_dotenv()
@@ -16,17 +18,25 @@ else:
     print("Error: OPENAI_API_KEY not found in environment variables.")  # Debugging: Check if API key is loaded
     client = None  # Set client to None if no API key is found
 
-async def stream_gpt4_response(prompt=None, image_path=None, model="gpt-4o-mini"):
+async def stream_gpt4_response(prompt=None, image=None, model="gpt-4o-mini"):
     if not client:
         yield "Error: No API key found. Please provide a valid OpenAI API key."
         return
 
     try:
-        if image_path:
-            # Encode the image to base64
-            with open(image_path, "rb") as image_file:
-                base64_image = base64.b64encode(image_file.read()).decode('utf-8')
+        if image:
+            # Create a BytesIO buffer to hold the image data
+            buffer = BytesIO()
 
+            # Save the image to the buffer in a specific format (e.g., PNG)
+            image.save(buffer, format="JPEG")
+
+            # Get the byte data from the buffer
+            image_bytes = buffer.getvalue()
+
+            # Encode the byte data to base64
+            base64_string = base64.b64encode(image_bytes).decode('utf-8')
+            
             # Send the image to the AI
             stream = await client.chat.completions.create(
                 model=model,
@@ -44,7 +54,7 @@ async def stream_gpt4_response(prompt=None, image_path=None, model="gpt-4o-mini"
                         "role": "user",
                         "content": [
                             {"type": "text", "text": "Here an image of the question. Read and understand the image."},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_string}"}}
                         ]
                     }
                 ],
