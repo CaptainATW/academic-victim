@@ -2,14 +2,14 @@
 
 # Academic Victim
 
-If you're reading this, you're an **academic victim**.
+If you're reading this, thats probably what you look like ->
 
 ## Installation
 
 To install this project, you need to clone or download the repository. Unlike traditional executables, you will need to run the project from source.
 
 ### Requirements
-- You **will need an OpenAI API key** if you want to utilize GPT-4 or other OpenAI GPT models.
+- You **will need an OpenAI API key** if you want to utilize GPT-4o, or other OpenAI GPT models.
 
 ### Installation via GitHub Desktop and VSCode
 
@@ -29,14 +29,14 @@ To install this project, you need to clone or download the repository. Unlike tr
 4. In the command palette, search for and select `Python: Create Environment`.
 5. Choose:
    - `Venv > Create > Use Python 3.x`.
-   
-6. Once the environment is created, you'll need to install the required dependencies by running:
+
+6. Select "Install dependencies using requirements.txt" OR go make sure the environment is selected and run:
 
    ```bash
    pip install -r requirements.txt
    ```
 
-7. Now, you can run the main Python file by executing:
+8. Now, you can run the main Python file by executing:
 
    ```bash
    python main.py
