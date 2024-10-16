@@ -1,4 +1,4 @@
-<img align="right" alt="logo" width="200px" src="https://www.hanksbelts.com/cdn/shop/products/a2700oak-1_0e0f7550-f2aa-45c8-9010-cd3d0fe235c9_1200x.jpg?v=1711550204" />
+<img align="right" alt="logo" width="200px" src="https://raw.githubusercontent.com/CaptainATW/academic-victim/refs/heads/main/icon.png" />
 
 # Academic Victim
 
