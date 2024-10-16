@@ -6,8 +6,7 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Set up OpenAI client
-api_key = os.getenv("OPENAI_API_KEY")  # Get the API key from the environment
+api_key = os.getenv("OPENAI_API_KEY") 
 
 if api_key:
     api_key = api_key.strip()  # Strip any extra spaces or newlines

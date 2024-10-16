@@ -38,6 +38,8 @@ class PopupWindow:
         master.attributes("-alpha", 0.9)  # Set transparency
         master.attributes("-topmost", True)  # Always on top
         master.geometry("500x220+100+100")  # Adjusted height to accommodate the smaller top bar
+        #master.config(state=tk.DISABLED)
+       # master.bind("<Double-1>", lambda event: "break")
 
         # Create text_area first
         self.text_area = scrolledtext.ScrolledText(master, wrap=tk.WORD, width=40, height=10)
@@ -91,7 +93,9 @@ class PopupWindow:
         self.response_start_index = None
 
         # Disable text selection
-        self.text_area.bind("<Button-1>", lambda event: "break")
+        
+        #self.text_area.bind("<Double-1>", lambda event: "break")
+        #self.text_area.config(state=tk.DISABLED)
 
         # Hide scrollbar
         self.text_area.pack_forget()
@@ -198,17 +202,20 @@ class PopupWindow:
         """Handle keyboard shortcuts for marking positions and taking screenshots."""
         try:
             if self.is_macos:
-                # Track if Command key is pressed
-                if key == keyboard.Key.cmd:
+                # Track if Control and Shift keys are pressed
+                if key == keyboard.Key.ctrl_l:
                     self.cmd_pressed = True
-                    print("Command key pressed")
-                elif self.cmd_pressed and key.char == '1':
+                    print("Control key pressed")
+                elif key == keyboard.Key.shift:
+                    self.shift_pressed = True
+                    print("Shift key pressed")
+                elif self.cmd_pressed and self.shift_pressed and key.char == '1':
                     self.pos1 = self.get_mouse_position()
                     print(f"POS1 set at {self.pos1}")
-                elif self.cmd_pressed and key.char == '2':
+                elif self.cmd_pressed and self.shift_pressed and key.char == '2':
                     self.pos2 = self.get_mouse_position()
                     print(f"POS2 set at {self.pos2}")
-                elif self.cmd_pressed and key.char == '3':
+                elif self.cmd_pressed and self.shift_pressed and key.char == '3':
                     if self.pos1 and self.pos2:
                         self.take_screenshot()
                     else:
@@ -234,9 +241,13 @@ class PopupWindow:
 
     def on_key_release(self, key):
         """Handle key release events."""
-        if self.is_macos and key == keyboard.Key.cmd:
-            self.cmd_pressed = False
-            print("Command key released")
+        if self.is_macos:
+            if key == keyboard.Key.ctrl_l:
+                self.cmd_pressed = False
+                print("Control key released")
+            elif key == keyboard.Key.shift:
+                self.shift_pressed = False
+                print("Shift key released")
         elif not self.is_macos and key == keyboard.Key.ctrl_l:
             self.cmd_pressed = False
             print("Control key released")
