@@ -9,6 +9,7 @@ from PIL import ImageGrab  # For taking screenshots
 from pynput import mouse, keyboard  # For capturing mouse and keyboard events
 import platform
 from datetime import datetime
+from PIL import Image, ImageTk
 
 # Load environment variables
 load_dotenv()
@@ -17,6 +18,22 @@ class PopupWindow:
     def __init__(self, master, loop):
         self.master = master
         self.loop = loop  # Store the main event loop
+
+        # Set the window title
+        master.title("academic victim")
+
+        # Set the window icon based on the platform
+        if platform.system() == "Darwin":  # macOS
+            icon_path = "icon.png"
+            if os.path.exists(icon_path):
+                icon_image = Image.open(icon_path)
+                icon_photo = ImageTk.PhotoImage(icon_image)
+                master.iconphoto(True, icon_photo)
+        elif platform.system() == "Windows":  # Windows
+            icon_path = "icon.ico"
+            if os.path.exists(icon_path):
+                master.iconbitmap(icon_path)
+
         master.overrideredirect(True)  # Remove window decorations
         master.attributes("-alpha", 0.9)  # Set transparency
         master.attributes("-topmost", True)  # Always on top
