@@ -4,7 +4,7 @@
 
 If you're reading this, thats probably what you look like ->
 
-Academic Victim is a python app that extracts questions from clipboard text or images, then uses OpenAI models like gpt-4o to provide answers in a simple pop-up window.   
+this is a python app that extracts questions from clipboard text or images, then uses OpenAI models like gpt-4o to provide answers in a simple pop-up window.   
 
 ## Installation
 
