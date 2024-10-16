@@ -261,7 +261,7 @@ class PopupWindow:
     async def send_screenshot_to_ai(self, screenshot_path):
         """Send the screenshot to the AI and display the response."""
         self.update_text("Processing screenshot...\n")
-        async for response_chunk in stream_gpt4_response(None, image_path=screenshot_path):
+        async for response_chunk in stream_gpt4_response(prompt=None, image_path=screenshot_path, model=self.model_options[self.current_model_index]):
             self.update_text(response_chunk)
             self.master.update()
         self.update_text("\n\n")
@@ -306,7 +306,7 @@ async def check_clipboard(popup):
             print("ignore clipboard here", popup.ignore_clipboard)
             last_clipboard = current_clipboard
             popup.update_text("Processing new clipboard content...\n")
-            async for response_chunk in stream_gpt4_response(current_clipboard, None, popup.model_options[popup.current_model_index]):
+            async for response_chunk in stream_gpt4_response(prompt=current_clipboard, image_path=None, model=popup.model_options[popup.current_model_index]):
                 popup.update_text(response_chunk)
                 popup.master.update()
             popup.update_text("\n\n")
