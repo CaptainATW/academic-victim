@@ -65,7 +65,7 @@ async def stream_gpt4_response(prompt=None, image=None, model="gpt-4o-mini"):
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": "Here an image of the question. Read and understand the image."},
+                            {"type": "text", "text": "Here an image of the question. Read and understand the image, then solve the question."},
                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_string}"}}
                         ]
                     }

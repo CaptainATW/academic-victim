@@ -17,6 +17,9 @@ class PopupWindow:
         # Set the window title
         master.title("academic victim")
 
+        # Set the background of the master canvas to #1e1f22 (dark black)
+        master.config(bg="#1e1f22")
+
         # Set the window icon based on the platform
         if platform.system() == "Darwin":  # macOS
             icon_path = "icon.png"
@@ -33,12 +36,24 @@ class PopupWindow:
         master.attributes("-alpha", 0.9)  # Set transparency
         master.attributes("-topmost", True)  # Always on top
         master.geometry("500x220+100+100")  # Adjusted height to accommodate the smaller top bar
-        #master.config(state=tk.DISABLED)
-       # master.bind("<Double-1>", lambda event: "break")
 
-        # Create text_area first
-        self.text_area = scrolledtext.ScrolledText(master, wrap=tk.WORD, width=40, height=10)
+        # Create text_area first with Arial font, white text, and read-only state
+        # Remove the border and highlight by setting bd=0 and highlightthickness=0
+        self.text_area = scrolledtext.ScrolledText(
+            master, 
+            wrap=tk.WORD, 
+            width=40, 
+            height=10, 
+            font=("Arial", 12), 
+            fg="white", 
+            bg="#1e1f22", 
+            bd=0,  # No border
+            highlightthickness=0  # No highlight border
+        )
         self.text_area.pack(expand=True, fill='both')
+
+        # Make the text box read-only
+        #self.text_area.config(state=tk.DISABLED)
 
         # Function to check if the API key exists
         def check_api_key_exists():
@@ -58,41 +73,53 @@ class PopupWindow:
         if not self.api_key_set:
             self.display_api_key_message()
 
-        # Top bar frame (hidden by default)
-        self.top_bar = tk.Frame(master, height=30)
+        # Top bar frame (hidden by default) with #343740 (gray) background
+        self.top_bar = tk.Frame(master, height=30, bg="#343740")
         self.top_bar.pack(fill=tk.X)
         self.top_bar.pack_forget()  # Hide the top bar initially
 
-        # Button styling (black background, white text, no padding, and black when focused)
+        # Button styling (#343740 background, white text, no padding, and gray when focused)
         button_style = {
-            #"width": 2,  # Square buttons for "Close" and "Copy"
             "height": 1,
             "relief": tk.FLAT,  # No border
-            "bg": "gray",  # Black background
-            "fg": "black",  # White text
-            "highlightcolor": "gray",
+            "bg": "#4752c4",  # Gray background
+            "fg": "white",  # White text
+            "highlightcolor": "#4752c4",
             "highlightthickness": 0,  # Remove highlight border (important for macOS)
+            "font": ("Arial", 11, "bold")
         }
 
-        # Add the "acedemic weapon" label
-        self.label = tk.Label(self.top_bar, text="academic victim", fg="white")
-        self.label.pack(side=tk.LEFT, padx=5, pady=(0, 5))  # Added vertical padding for centering
+        # Add the "academic victim" label with white text and #343740 background
+        self.label = tk.Label(self.top_bar, text="academic victim", fg="white", bg="#343740", font=("Arial", 11, "bold"))
+        if platform.system() == "Darwin":
+            self.label.pack(side=tk.LEFT, padx=5, pady=(0, 5))  # Added vertical padding for centering
+        else:
+            self.label.pack(side=tk.LEFT, padx=(7,7), pady=(5, 5))  # Added vertical padding for centering
 
-        # Close button (square)
+        # Close button (square) with white text and #343740 background
         self.close_button = tk.Button(self.top_bar, text="X", command=self.close_window, **button_style)
-        self.close_button.pack(side=tk.RIGHT, padx=(0, 5), pady=(0, 5))  # No padding
+        if platform.system() == "Darwin":
+            self.close_button.pack(side=tk.RIGHT, padx=(0,5), pady=(0, 5))  # Added vertical padding for centering
+        else:
+            self.close_button.pack(side=tk.RIGHT, padx=(3), pady=(5, 5)) 
 
-        # Copy button (square)
+        # Copy button (square) with white text and #343740 background
         self.copy_button = tk.Button(self.top_bar, text="C", command=self.copy_last_response, **button_style)
-        self.copy_button.pack(side=tk.RIGHT, padx=0, pady=(0, 5))  # No padding
+        if platform.system() == "Darwin":
+            self.copy_button.pack(side=tk.RIGHT, padx=(0,5), pady=(0, 5))  # Added vertical padding for centering
+        else:
+            self.copy_button.pack(side=tk.RIGHT, padx=(3), pady=(5, 5)) 
 
-        # Model button (adjust width based on text length)
+        # Model button (adjust width based on text length) with white text and #343740 background
         self.model_options = ["gpt-4o", "chatgpt-4o-latest", "gpt-4o-mini"]
         self.current_model_index = 2  # Default to gpt-4o-mini
         model_text = f"Model: {self.model_options[self.current_model_index]}"
         self.model_button = tk.Button(self.top_bar, text=model_text, command=self.cycle_model, **button_style)
         self.model_button.config(width=len(model_text))  # Set width based on text length
-        self.model_button.pack(side=tk.RIGHT, padx=0, pady=(0, 5))  # No padding
+        if platform.system() == "Darwin":
+            self.model_button.pack(side=tk.RIGHT, padx=(0,5), pady=(0, 5))  # No padding
+        else:
+            self.model_button.pack(side=tk.RIGHT, padx=(3), pady=(5, 5)) 
 
         # Track the start of the assistant's response
         self.response_start_index = None
@@ -123,9 +150,11 @@ class PopupWindow:
         self.keyboard_listener = keyboard.Listener(on_press=self.on_key_press, on_release=self.on_key_release)
         self.keyboard_listener.start()
 
-        # Detect if running on macOS
+        # Detect if running on macOS or Windows
         self.is_macos = platform.system() == "Darwin"
-        self.cmd_pressed = False  # Track if Command key is pressed
+        self.is_windows = platform.system() == "Windows"
+        self.ctrl_pressed = False  # Track if Control key is pressed
+        self.shift_pressed = False  # Track if Shift key is pressed
 
     def update_text(self, text):
         if "Processing new clipboard content..." in text:
@@ -201,61 +230,53 @@ class PopupWindow:
     def on_key_press(self, key):
         """Handle keyboard shortcuts for marking positions and taking screenshots."""
         try:
-            if self.is_macos:
-                # Track if Control and Shift keys are pressed
-                if key == keyboard.Key.ctrl_l:
-                    self.cmd_pressed = True
-                    print("Control key pressed")
-                elif key == keyboard.Key.shift:
-                    self.shift_pressed = True
-                    print("Shift key pressed")
-                elif self.cmd_pressed and self.shift_pressed and key.char == '1':
-                    self.pos1 = self.get_mouse_position()
-                    print(f"POS1 set at {self.pos1}")
-                elif self.cmd_pressed and self.shift_pressed and key.char == '2':
-                    self.pos2 = self.get_mouse_position()
-                    print(f"POS2 set at {self.pos2}")
-                elif self.cmd_pressed and self.shift_pressed and key.char == '3':
-                    if self.pos1 and self.pos2:
-                        self.take_screenshot()
-                    else:
-                        print("Error: POS1 and POS2 must be set before taking a screenshot.")
-            else:
-                # Use Control key on other platforms
-                if key == keyboard.Key.ctrl_l:
-                    self.cmd_pressed = True
-                    print("Control key pressed")
-                elif self.cmd_pressed and key.char == '1':
-                    self.pos1 = self.get_mouse_position()
-                    print(f"POS1 set at {self.pos1}")
-                elif self.cmd_pressed and key.char == '2':
-                    self.pos2 = self.get_mouse_position()
-                    print(f"POS2 set at {self.pos2}")
-                elif self.cmd_pressed and key.char == '3':
-                    if self.pos1 and self.pos2:
-                        self.take_screenshot()
-                    else:
-                        print("Error: POS1 and POS2 must be set before taking a screenshot.")
+            if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
+                self.ctrl_pressed = True
+            if key == keyboard.Key.alt_l:
+                self.shift_pressed = True
+            if self.ctrl_pressed and self.shift_pressed:
+                if self.is_windows:
+                    # Use key codes for Windows
+                    if str(key) == '<49>':
+                        self.pos1 = self.get_mouse_position()
+                        print(f"POS1 set at {self.pos1}")
+                    elif str(key) == '<50>':
+                        self.pos2 = self.get_mouse_position()
+                        print(f"POS2 set at {self.pos2}")
+                    elif str(key) == '<51>':
+                        if self.pos1 and self.pos2:
+                            print(f"Taking screenshot between {self.pos1} and {self.pos2}")
+                            self.take_screenshot()
+                        else:
+                            print("Error: POS1 and POS2 must be set before taking a screenshot.")
+                else:
+                    # Use key.char for macOS
+                    if key.char == '1':
+                        self.pos1 = self.get_mouse_position()
+                        print(f"POS1 set at {self.pos1}")
+                    elif key.char == '2':
+                        self.pos2 = self.get_mouse_position()
+                        print(f"POS2 set at {self.pos2}")
+                    elif key.char == '3':
+                        if self.pos1 and self.pos2:
+                            print(f"Taking screenshot between {self.pos1} and {self.pos2}")
+                            self.take_screenshot()
+                        else:
+                            print("Error: POS1 and POS2 must be set before taking a screenshot.")
         except AttributeError:
             pass
 
     def on_key_release(self, key):
         """Handle key release events."""
-        if self.is_macos:
-            if key == keyboard.Key.ctrl_l:
-                self.cmd_pressed = False
-                print("Control key released")
-            elif key == keyboard.Key.shift:
-                self.shift_pressed = False
-                print("Shift key released")
-        elif not self.is_macos and key == keyboard.Key.ctrl_l:
-            self.cmd_pressed = False
-            print("Control key released")
-
+        if key == keyboard.Key.ctrl_l or key == keyboard.Key.ctrl_r:
+            self.ctrl_pressed = False
+        if key == keyboard.Key.shift:
+            self.shift_pressed = False
     def get_mouse_position(self):
         """Get the current mouse position."""
         with mouse.Controller() as controller:
-            return controller.position
+            position = controller.position
+            return position
 
     def take_screenshot(self):
         """Take a screenshot between POS1 and POS2 and send it to the AI."""
