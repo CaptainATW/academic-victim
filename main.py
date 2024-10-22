@@ -52,8 +52,8 @@ class PopupWindow:
         )
         self.text_area.pack(expand=True, fill='both')
 
-        # Make the text box read-only
-        #self.text_area.config(state=tk.DISABLED)
+        # Make the text box read-only initially
+        self.text_area.config(state=tk.DISABLED)
 
         # Function to check if the API key exists
         def check_api_key_exists():
@@ -72,6 +72,9 @@ class PopupWindow:
         # If API key is not set, display a message
         if not self.api_key_set:
             self.display_api_key_message()
+        else:
+            # Display default message when API key is loaded
+            self.display_default_message()
 
         # Top bar frame (hidden by default) with #343740 (gray) background
         self.top_bar = tk.Frame(master, height=30, bg="#343740")
@@ -157,12 +160,19 @@ class PopupWindow:
         self.shift_pressed = False  # Track if Shift key is pressed
 
     def update_text(self, text):
+        """Update the text area with new text."""
+        # Temporarily enable the text area to insert text
+        self.text_area.config(state=tk.NORMAL)
+
         if "Processing new clipboard content..." in text:
             # Mark the start of the assistant's response
             self.response_start_index = self.text_area.index(tk.END)
         self.text_area.insert(tk.END, text)
         self.text_area.see(tk.END)
         self.last_response += text  # Append to last response
+
+        # Disable the text area again to make it read-only
+        self.text_area.config(state=tk.DISABLED)
 
     def close_window(self):
         self.master.destroy()  # Close the window
@@ -359,6 +369,26 @@ class PopupWindow:
         with open(config_file, "a") as env_file:
             env_file.write(f"\nOPENAI_API_KEY={api_key}\n")
         print(f"API key saved to {config_file}: {api_key}...")  # Debugging: Print the first few characters of the API key
+
+    def display_default_message(self):
+        """Display a default message when the window is opened with a loaded API key."""
+        # Temporarily enable the text area to insert text
+        self.text_area.config(state=tk.NORMAL)
+
+        # Insert the default message with bold, light gray color, and font size 6
+        self.text_area.insert(tk.END, "Copy any text to start, or use the following shortcuts:\n", ("bold", "small", "gray"))
+        self.text_area.insert(tk.END, "Ctrl+Alt+1 for Position 1\n", ("bold", "small", "gray"))
+        self.text_area.insert(tk.END, "Ctrl+Alt+2 for Position 2\n", ("bold", "small", "gray"))
+        self.text_area.insert(tk.END, "Ctrl+Alt+3 to take a screenshot between 2 positions and send\n", ("bold", "small", "gray"))
+        self.text_area.see(tk.END)
+
+        # Configure the tag for bold, light gray, and small font size
+        self.text_area.tag_configure("bold", font=("Arial", 6, "bold"))
+        self.text_area.tag_configure("small", font=("Arial", 6))
+        self.text_area.tag_configure("gray", foreground="light gray")
+
+        # Disable the text area again to make it read-only
+        self.text_area.config(state=tk.DISABLED)
 
 async def check_clipboard(popup):
     last_clipboard = pyperclip.paste()  # Initialize with current clipboard content
