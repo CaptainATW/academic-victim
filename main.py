@@ -3,16 +3,11 @@ import pyperclip
 import tkinter as tk
 from tkinter import scrolledtext
 import os
-from dotenv import load_dotenv
 from ai import stream_gpt4_response  # Import from ai.py
 from PIL import ImageGrab  # For taking screenshots
 from pynput import mouse, keyboard  # For capturing mouse and keyboard events
 import platform
-from datetime import datetime
 from PIL import Image, ImageTk
-
-# Load environment variables
-load_dotenv()
 
 class PopupWindow:
     def __init__(self, master, loop):
@@ -45,9 +40,19 @@ class PopupWindow:
         self.text_area = scrolledtext.ScrolledText(master, wrap=tk.WORD, width=40, height=10)
         self.text_area.pack(expand=True, fill='both')
 
-        # Check if the API key is set
-        self.api_key = os.getenv("OPENAI_API_KEY")
-        self.api_key_set = bool(self.api_key)
+        # Function to check if the API key exists
+        def check_api_key_exists():
+            if platform.system() == "Darwin":  # macOS
+                config_file = os.path.expanduser("~/.academic_victim")
+            elif platform.system() == "Windows":
+                config_file = os.path.join(os.environ["USERPROFILE"], ".academic_victim")
+            else:
+                config_file = ".academic_victim"  # Fallback to current directory for other OS
+            
+            return os.path.exists(config_file)
+
+        # Check if the API key file exists
+        self.api_key_set = check_api_key_exists()
 
         # If API key is not set, display a message
         if not self.api_key_set:
@@ -317,24 +322,41 @@ class PopupWindow:
             await asyncio.sleep(1)  # Check every second
 
     def update_env_file(self, api_key):
-        """Write the API key to the .env file."""
-        with open(".env", "a") as env_file:
+        """Write the API key to the hidden .academic_victim file."""
+        
+        # Determine the appropriate file path based on the operating system
+        if platform.system() == "Darwin":  # macOS
+            config_file = os.path.expanduser("~/.academic_victim")
+        elif platform.system() == "Windows":
+            config_file = os.path.join(os.environ["USERPROFILE"], ".academic_victim")
+        else:
+            config_file = ".academic_victim"  # Fallback to current directory for other OS
+
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(config_file), exist_ok=True)
+
+        with open(config_file, "a") as env_file:
             env_file.write(f"\nOPENAI_API_KEY={api_key}\n")
-        print(f"API key saved to .env: {api_key[:5]}...")  # Debugging: Print the first few characters of the API key
+        print(f"API key saved to {config_file}: {api_key}...")  # Debugging: Print the first few characters of the API key
 
 async def check_clipboard(popup):
     last_clipboard = pyperclip.paste()  # Initialize with current clipboard content
     while True:
-        current_clipboard = pyperclip.paste()
-        if current_clipboard != last_clipboard and current_clipboard != popup.ignore_clipboard:
-            print("ignore clipboard here", popup.ignore_clipboard)
-            last_clipboard = current_clipboard
-            popup.update_text("Processing new clipboard content...\n")
-            async for response_chunk in stream_gpt4_response(prompt=current_clipboard, image_path=None, model=popup.model_options[popup.current_model_index]):
-                popup.update_text(response_chunk)
-                popup.master.update()
-            popup.update_text("\n\n")
-        await asyncio.sleep(1)  # Check every second
+        try:
+            current_clipboard = pyperclip.paste()
+            if current_clipboard != last_clipboard and current_clipboard != popup.ignore_clipboard:
+                print(f"New clipboard content detected: {current_clipboard[:50]}...")  # Debug print
+                print(f"Ignored content: {popup.ignore_clipboard[:50]}...")  # Debug print
+                popup.update_text("Processing new clipboard content...\n")
+                async for response_chunk in stream_gpt4_response(prompt=current_clipboard, image=None, model=popup.model_options[popup.current_model_index]):
+                    popup.update_text(response_chunk)
+                    await asyncio.sleep(0.01)  # Allow GUI to update
+                popup.update_text("\n\n")
+                last_clipboard = current_clipboard
+            popup.ignore_clipboard = ""  # Reset ignore_clipboard after each check
+        except Exception as e:
+            print(f"Error in check_clipboard: {e}")
+        await asyncio.sleep(0.5)  # Check every half second for more responsiveness
 
 async def main():
     root = tk.Tk()

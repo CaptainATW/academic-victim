@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "py2app"]
+build-backend = "setuptools.build_meta"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pyqt5 = "^5.15.10"
+setuptools = "==70.3.0"
+
+[project]
+name = "academicvictim"
+version = "0.1.1"
+description = "Academic assistance tool"
+authors = [{name = "CaptainATW"}]
+license = {text = "All Rights Reserved"}
+requires-python = ">=3.12"
+
+[project.scripts]
+academic_victim = "main:main"
+
+[tool.setuptools]
+py-modules = ["ai", "main"]
+
+[tool.py2app]
+app = ["main.py"]
+data_files = ["icon.png", "icon.ico"]
+packages = ["openai", "PIL", "pynput", "asyncio"]
+includes = ["ai", "asyncio", "asyncio.coroutines", "asyncio.protocols", "sniffio", "anyio"]
+plist = {CFBundleName = "academic victims", CFBundleDisplayName = "academic victim", CFBundleGetInfoString = "Academic assistance tool", CFBundleIdentifier = "com.captainatw.academicvictim", CFBundleVersion = "0.1.0", CFBundleShortVersionString = "0.1.0", NSHumanReadableCopyright = "Copyright © 2024, CaptainATW, All Rights Reserved"}

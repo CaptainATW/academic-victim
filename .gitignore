@@ -5,3 +5,6 @@
 /images/*
 !images/.gitkeep
 .DS_Store
+/build/
+/dist/
+academicvictim.egg-info/

@@ -1,14 +1,26 @@
 import base64
 import os
 from openai import AsyncOpenAI
-from dotenv import load_dotenv
 from PIL import Image
+import platform
 from io import BytesIO
+# Load API key from the hidden .academic_victim file
+def load_api_key():
+    if platform.system() == "Darwin":  # macOS
+        config_file = os.path.expanduser("~/.academic_victim")
+    elif platform.system() == "Windows":
+        config_file = os.path.join(os.environ["USERPROFILE"], ".academic_victim")
+    else:
+        config_file = ".academic_victim"  # Fallback to current directory for other OS
+    
+    if os.path.exists(config_file):
+        with open(config_file, "r") as f:
+            for line in f:
+                if line.startswith("OPENAI_API_KEY="):
+                    return line.split("=")[1].strip()
+    return None
 
-# Load environment variables
-load_dotenv()
-
-api_key = os.getenv("OPENAI_API_KEY") 
+api_key = load_api_key()
 
 if api_key:
     api_key = api_key.strip()  # Strip any extra spaces or newlines
