@@ -4,3 +4,4 @@ Pillow==10.1.0
 pynput==1.7.7
 openai==1.51.2
 python-dotenv==1.0.1
+tkmacosx==1.0.1
