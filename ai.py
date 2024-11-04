@@ -1,5 +1,6 @@
 import base64
 import os
+import json
 from openai import AsyncOpenAI
 from PIL import Image
 import platform
@@ -7,6 +8,57 @@ from io import BytesIO
 
 formatted_text = ""
 INCLUDE_CONTEXT = False
+ENABLE_CHAT_HISTORY = True  # New variable for chat history toggle
+CHAT_HISTORY_FILE = "chat_history.json"
+
+def load_chat_history():
+    """Load chat history from JSON file"""
+    try:
+        if os.path.exists(CHAT_HISTORY_FILE):
+            with open(CHAT_HISTORY_FILE, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error loading chat history: {e}")
+    
+    # Return default history if file doesn't exist or has error
+    return {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Your job is to answer difficult coding questions. Output all answers in python, unless said otherwise."
+                    }
+                ]
+            }
+        ]
+    }
+
+def save_chat_history(messages):
+    """Save chat history to JSON file"""
+    try:
+        with open(CHAT_HISTORY_FILE, 'w') as f:
+            json.dump({"messages": messages}, f, indent=2)
+    except Exception as e:
+        print(f"Error saving chat history: {e}")
+
+def append_to_history(role, content):
+    """Append a new message to chat history if enabled"""
+    if not ENABLE_CHAT_HISTORY:
+        return
+        
+    history = load_chat_history()
+    history["messages"].append({
+        "role": role,
+        "content": [
+            {
+                "type": "text",
+                "text": content
+            }
+        ]
+    })
+    save_chat_history(history["messages"])
 
 def load_api_key():
     config_file = os.path.expanduser("~/.academic_victim") if platform.system() == "Darwin" else \
@@ -34,6 +86,46 @@ def toggle_context():
     global INCLUDE_CONTEXT
     INCLUDE_CONTEXT = not INCLUDE_CONTEXT
     return INCLUDE_CONTEXT
+
+def reset_chat_history():
+    """Reset chat history and return number of messages deleted"""
+    try:
+        if os.path.exists(CHAT_HISTORY_FILE):
+            with open(CHAT_HISTORY_FILE, 'r') as f:
+                old_history = json.load(f)
+                num_messages = len(old_history.get("messages", [])) - 1  # Subtract 1 to exclude system message
+        else:
+            num_messages = 0
+
+        # Create new history with just the system message
+        new_history = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Your job is to answer difficult coding questions. Output all answers in python, unless said otherwise."
+                        }
+                    ]
+                }
+            ]
+        }
+        
+        # Save new history
+        with open(CHAT_HISTORY_FILE, 'w') as f:
+            json.dump(new_history, f, indent=2)
+            
+        return num_messages
+    except Exception as e:
+        print(f"Error resetting chat history: {e}")
+        return 0
+
+def toggle_chat_history():
+    """Toggle whether messages are saved to chat history"""
+    global ENABLE_CHAT_HISTORY
+    ENABLE_CHAT_HISTORY = not ENABLE_CHAT_HISTORY
+    return ENABLE_CHAT_HISTORY
 
 api_key = load_api_key()
 client = AsyncOpenAI(api_key=api_key.strip()) if api_key else None
@@ -87,13 +179,14 @@ async def orion_response(prompt=None, image=None, model="o1-mini"):
         return
 
     try:
-        messages = []
-        
-        # Add context if enabled
+        history = load_chat_history()
+        messages = history["messages"]
+
+        # Add context if enabled and exists
         if INCLUDE_CONTEXT and formatted_text:
             messages.append({
                 "role": "user",
-                "content": [{"type": "text", "text": f"Previous context:\n{formatted_text}"}]
+                "content": [{"type": "text", "text": f"Here is the full text of the problem:\n{formatted_text}"}]
             })
 
         if image:
@@ -106,9 +199,15 @@ async def orion_response(prompt=None, image=None, model="o1-mini"):
                 ]
             })
         else:
+            # If context is enabled, include it with the prompt
+            if INCLUDE_CONTEXT and formatted_text:
+                full_prompt = f"Here is the full text of the coding question:\n{formatted_text}\n\nUser question:\n{prompt}"
+            else:
+                full_prompt = prompt
+                
             messages.append({
                 "role": "user",
-                "content": [{"type": "text", "text": prompt}]
+                "content": [{"type": "text", "text": full_prompt}]
             })
 
         # Non-streaming call for Orion models
@@ -118,8 +217,14 @@ async def orion_response(prompt=None, image=None, model="o1-mini"):
             response_format={"type": "text"}
         )
 
-        # Yield the complete response
-        yield response.choices[0].message.content
+        response_content = response.choices[0].message.content
+        
+        # Save both the user's prompt and the assistant's response
+        if prompt:
+            append_to_history("user", full_prompt if INCLUDE_CONTEXT and formatted_text else prompt)
+        append_to_history("assistant", response_content)
+        
+        yield response_content
 
     except Exception as e:
         yield f"Error: {e}"
@@ -131,17 +236,14 @@ async def stream_gpt4_response(prompt=None, image=None, model="gpt-4o-mini"):
         return
 
     try:
-        messages = [
-            {
-                "role": "system",
-                "content": [{"type": "text", "text": "When provided with a quiz question, determine the answer. If the question appears straightforward or simple, respond quickly. If it seems complex or difficult, take additional time to think through the answer thoroughly.\n\n# Steps\n\n1. **Assess the Question**: Quickly read through the question to understand its complexity.\n2. **Determine Complexity**:\n   - If the question is **easy**, rely on basic knowledge or obvious solutions to answer promptly.\n   - If the question is **hard**, analyze the components, consider various possibilities, and apply logical reasoning.\n3. **Generate Answer**:\n   - Apply relevant knowledge or logic to formulate an answer based on your assessment.\n4. **Reflect**: Briefly review the reasoning and ensure the answer aligns with the complexity of the question.\n\n# Output Format\n\n- Provide a short, concise answer. If complex reasoning is involved, briefly summarize the thought process leading to the answer.\n\n# Examples\n\n**Example 1: Easy Question**\n- **Input**: What is 2 + 2?\n- **Output**: 4\n\n**Example 2: Hard Question**\n- **Input**: Analyze the impact of World War I on the global political landscape.\n- **Output**: The impact of World War I on the global political landscape includes the redrawing of national borders, the establishment of the League of Nations, and significant shifts in political power, particularly leading to the fall of empires like Austro-Hungarian and Ottoman, contributing to the rise of new ideologies and tensions leading to World War II.\n\n# Notes\n\n- Prioritize clarity and accuracy in your answers.\n- Consider the context of the quiz, as it might provide clues to answer complex questions effectively."}]
-            }
-        ]
+        history = load_chat_history()
+        messages = history["messages"]
 
+        # Add context if enabled and exists
         if INCLUDE_CONTEXT and formatted_text:
             messages.append({
                 "role": "user",
-                "content": [{"type": "text", "text": f"Previous context:\n{formatted_text}"}]
+                "content": [{"type": "text", "text": f"Here is the entire coding problem: \n{formatted_text}"}]
             })
 
         if image:
@@ -154,9 +256,15 @@ async def stream_gpt4_response(prompt=None, image=None, model="gpt-4o-mini"):
                 ]
             })
         else:
+            # If context is enabled, include it with the prompt
+            if INCLUDE_CONTEXT and formatted_text:
+                full_prompt = f"Here is full text of the coding question:\n{formatted_text}\n\nUser question:\n{prompt}"
+            else:
+                full_prompt = prompt
+                
             messages.append({
                 "role": "user",
-                "content": [{"type": "text", "text": prompt}]
+                "content": [{"type": "text", "text": full_prompt}]
             })
 
         stream = await client.chat.completions.create(
@@ -171,8 +279,18 @@ async def stream_gpt4_response(prompt=None, image=None, model="gpt-4o-mini"):
             response_format={"type": "text"}
         )
 
+        full_response = ""
+        if prompt:
+            append_to_history("user", full_prompt if INCLUDE_CONTEXT and formatted_text else prompt)
+
         async for chunk in stream:
             if chunk.choices[0].delta.content is not None:
-                yield chunk.choices[0].delta.content
+                content = chunk.choices[0].delta.content
+                full_response += content
+                yield content
+
+        # Save the complete response after streaming
+        append_to_history("assistant", full_response)
+
     except Exception as e:
         yield f"Error: {e}"

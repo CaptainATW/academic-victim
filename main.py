@@ -3,7 +3,7 @@ import pyperclip
 import tkinter as tk
 from tkinter import scrolledtext, Tk
 import os
-from ai import stream_gpt4_response, image_ocr, clear_formatted_text, toggle_context, orion_response
+from ai import stream_gpt4_response, image_ocr, clear_formatted_text, toggle_context, orion_response, reset_chat_history, toggle_chat_history, ENABLE_CHAT_HISTORY
 from PIL import ImageGrab, Image, ImageTk
 from pynput import mouse, keyboard
 import platform
@@ -33,7 +33,7 @@ class PopupWindow:
         self.setup_icon()
         self.master.overrideredirect(True)
         self.master.attributes("-alpha", 0.9, "-topmost", True)
-        self.master.geometry("500x220+100+100")
+        self.master.geometry("400x800+100+100")
 
     def setup_icon(self):
         if platform.system() == "Darwin":
@@ -71,7 +71,6 @@ class PopupWindow:
         self.label.pack(side=tk.LEFT, padx=5, pady=(0, 2))
 
         button_config = {
-            "bg": "#4752c4",
             "fg": "white",
             "activebackground": "#3b45a8",
             "activeforeground": "white",
@@ -83,15 +82,48 @@ class PopupWindow:
             "takefocus": 0
         }
 
+        toggle_button_config = button_config.copy()
+        toggle_button_config["width"] = 30
+
         if platform.system() == "Darwin":
             button_config["borderless"] = False
+            toggle_button_config["borderless"] = False
             Button_class = Button
+            if "bg" in button_config: del button_config["bg"]
+            if "bg" in toggle_button_config: del toggle_button_config["bg"]
         else:
             Button_class = tk.Button
             button_config["height"] = 1
+            toggle_button_config["height"] = 1
+            button_config["bg"] = "#4752c4"
 
-        self.close_button = Button_class(self.top_bar, text="X", command=self.close_window, width=30, **button_config)
-        self.copy_button = Button_class(self.top_bar, text="C", command=self.copy_last_response, width=30, **button_config)
+        # Create all buttons
+        if platform.system() == "Darwin":
+            self.context_button = Button_class(self.top_bar, text="CTX", command=self.toggle_context_button, 
+                                             background="#ff4444", **toggle_button_config)
+            self.history_button = Button_class(self.top_bar, text="HST", command=self.toggle_history_button,
+                                             background="#44ff44", **toggle_button_config)
+            self.wipe_history_button = Button_class(self.top_bar, text="WH", command=self.wipe_history_button,
+                                                  background="#4752c4", **toggle_button_config)
+            self.wipe_context_button = Button_class(self.top_bar, text="WC", command=self.wipe_context_button,
+                                                  background="#4752c4", **toggle_button_config)
+            self.close_button = Button_class(self.top_bar, text="X", command=self.close_window, 
+                                           width=30, background="#4752c4", **button_config)
+            self.copy_button = Button_class(self.top_bar, text="C", command=self.copy_last_response, 
+                                          width=30, background="#4752c4", **button_config)
+        else:
+            self.context_button = Button_class(self.top_bar, text="CTX", command=self.toggle_context_button, 
+                                             bg="#ff4444", **toggle_button_config)
+            self.history_button = Button_class(self.top_bar, text="HST", command=self.toggle_history_button,
+                                             bg="#44ff44", **toggle_button_config)
+            self.wipe_history_button = Button_class(self.top_bar, text="WH", command=self.wipe_history_button,
+                                                  bg="#4752c4", **toggle_button_config)
+            self.wipe_context_button = Button_class(self.top_bar, text="WC", command=self.wipe_context_button,
+                                                  bg="#4752c4", **toggle_button_config)
+            self.close_button = Button_class(self.top_bar, text="X", command=self.close_window, 
+                                           width=30, **button_config)
+            self.copy_button = Button_class(self.top_bar, text="C", command=self.copy_last_response, 
+                                          width=30, **button_config)
         
         self.model_options = [
             "o1-preview", 
@@ -102,11 +134,18 @@ class PopupWindow:
         ]
         self.current_model_index = 1
         model_text = f"Model: {self.model_options[self.current_model_index]}"
-        self.model_button = Button_class(self.top_bar, text=model_text, command=self.cycle_model, 
-                                       width=len(model_text)*7 if platform.system() == "Darwin" else len(model_text),
-                                       **button_config)
+        
+        if platform.system() == "Darwin":
+            self.model_button = Button_class(self.top_bar, text=model_text, command=self.cycle_model, 
+                                           width=len(model_text)*7, background="#4752c4", **button_config)
+        else:
+            self.model_button = Button_class(self.top_bar, text=model_text, command=self.cycle_model, 
+                                           width=len(model_text), **button_config)
 
-        for button in [self.model_button, self.copy_button, self.close_button]:
+        # Pack buttons in reverse order
+        for button in [self.close_button, self.copy_button, self.context_button, 
+                      self.history_button, self.wipe_history_button, self.wipe_context_button, 
+                      self.model_button]:
             button.pack(side=tk.RIGHT, padx=(0,1), pady=(0, 2))
 
     def initialize_state(self):
@@ -145,10 +184,17 @@ class PopupWindow:
         self.text_area.config(state=tk.NORMAL)
         if "Processing new clipboard content..." in text:
             self.response_start_index = self.text_area.index(tk.END)
-        if tag:
-            self.text_area.insert(tk.END, text, tag)
+        
+        # If chat history is disabled, use yellow text unless a specific tag is provided
+        if not ENABLE_CHAT_HISTORY and tag is None:
+            self.text_area.tag_configure("history_disabled", foreground="#FFD700")
+            self.text_area.insert(tk.END, text, "history_disabled")
         else:
-            self.text_area.insert(tk.END, text)
+            if tag:
+                self.text_area.insert(tk.END, text, tag)
+            else:
+                self.text_area.insert(tk.END, text)
+                
         self.text_area.see(tk.END)
         self.last_response += text
         self.text_area.config(state=tk.DISABLED)
@@ -221,9 +267,9 @@ class PopupWindow:
                 
             if self.ctrl_pressed and self.shift_pressed:
                 try:
-                    if hasattr(key, 'char') and key.char in ['1', '2', '3', '4', '5', '9']:
+                    if hasattr(key, 'char') and key.char in ['1', '2', '3', '4', '5', '7', '8', '9']:
                         key_num = key.char
-                    elif hasattr(key, 'vk') and (49 <= key.vk <= 53 or key.vk == 57):
+                    elif hasattr(key, 'vk') and (49 <= key.vk <= 53 or key.vk in [55, 56, 57]):
                         key_num = str(key.vk - 48)
                     else:
                         return
@@ -338,6 +384,8 @@ class PopupWindow:
             ("Ctrl+Alt+3 to take a screenshot between 2 positions and send\n", ("bold", "small", "gray")),
             ("Ctrl+Alt+4 to take an OCR screenshot between 2 positions and send\n", ("bold", "small", "gray")),
             ("Ctrl+Alt+5 to toggle context inclusion\n", ("bold", "small", "gray")),
+            ("Ctrl+Alt+7 to toggle chat history\n", ("bold", "small", "gray")),
+            ("Ctrl+Alt+8 to reset chat history\n", ("bold", "small", "gray")),
             ("Ctrl+Alt+9 to clear OCR history\n", ("bold", "small", "gray"))
         ]
         
@@ -365,6 +413,27 @@ class PopupWindow:
         self.text_area.see(tk.END)
         self.text_area.config(state=tk.DISABLED)
 
+    def toggle_context_button(self):
+        context_enabled = toggle_context()
+        if platform.system() == "Darwin":
+            self.context_button.configure(background="#44ff44" if context_enabled else "#ff4444")
+        else:
+            self.context_button.configure(bg="#44ff44" if context_enabled else "#ff4444")
+        self.display_message(f"Context {'enabled' if context_enabled else 'disabled'}.\n\n")
+
+    def toggle_history_button(self):
+        history_enabled = toggle_chat_history()
+        if platform.system() == "Darwin":
+            self.history_button.configure(background="#44ff44" if history_enabled else "#ff4444")
+        else:
+            self.history_button.configure(bg="#44ff44" if history_enabled else "#ff4444")
+        if history_enabled:
+            self.text_area.tag_configure("history_disabled", foreground="white")
+            self.display_message("Chat history enabled - Messages will be saved to history.\n\n")
+        else:
+            self.text_area.tag_configure("history_disabled", foreground="#FFD700")
+            self.display_message("Chat history disabled - Messages will not be saved to history.\n\n", ("history_disabled",))
+
     def process_key_events(self):
         """Process any pending keyboard events in the queue"""
         try:
@@ -389,8 +458,12 @@ class PopupWindow:
                     else:
                         self.display_message("Error: POS1 and POS2 must be set before taking a screenshot.\n\n")
                 elif key_num == '5':
-                    context_enabled = toggle_context()
-                    self.display_message(f"Context {'enabled' if context_enabled else 'disabled'}.\n\n")
+                    self.toggle_context_button()
+                elif key_num == '7':
+                    self.toggle_history_button()
+                elif key_num == '8':
+                    num_deleted = reset_chat_history()
+                    self.display_message(f"Chat history reset! {num_deleted} messages were deleted.\n\n")
                 elif key_num == '9':
                     clear_formatted_text()
                     self.display_message("OCR history cleared.\n\n")
@@ -399,6 +472,28 @@ class PopupWindow:
         
         # Schedule the next check
         self.master.after(100, self.process_key_events)
+
+    def wipe_history_button(self):
+        num_deleted = reset_chat_history()
+        self.display_message(f"Chat history reset! {num_deleted} messages were deleted.\n\n")
+        # Flash the button
+        if platform.system() == "Darwin":
+            self.wipe_history_button.configure(background="#ff4444")
+            self.master.after(200, lambda: self.wipe_history_button.configure(background="#4752c4"))
+        else:
+            self.wipe_history_button.configure(bg="#ff4444")
+            self.master.after(200, lambda: self.wipe_history_button.configure(bg="#4752c4"))
+
+    def wipe_context_button(self):
+        clear_formatted_text()
+        self.display_message("OCR history cleared.\n\n")
+        # Flash the button
+        if platform.system() == "Darwin":
+            self.wipe_context_button.configure(background="#ff4444")
+            self.master.after(200, lambda: self.wipe_context_button.configure(background="#4752c4"))
+        else:
+            self.wipe_context_button.configure(bg="#ff4444")
+            self.master.after(200, lambda: self.wipe_context_button.configure(bg="#4752c4"))
 
 async def check_clipboard(popup):
     last_clipboard = pyperclip.paste()
