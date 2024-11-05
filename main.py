@@ -19,12 +19,13 @@ class PopupWindow:
         self.loop = loop
         self.key_event_queue = Queue()
         self.setup_window()
-        self.setup_text_area()
         self.setup_top_bar()
+        self.setup_text_area()
+        self.setup_input_bar()
+
         self.initialize_state()
         self.bind_events()
         self.check_api_key()
-        self.check_mouse_position()
         self.process_key_events()
 
     def setup_window(self):
@@ -50,26 +51,23 @@ class PopupWindow:
             wrap=tk.WORD,
             width=40,
             height=10,
-            font=("Arial", 14),
+            font=("Segoe", 14),
             fg="white",
             bg="#1e1f22",
             bd=0,
             highlightthickness=0
         )
-        self.text_area.pack(expand=True, fill='both')
+        self.text_area.pack(expand=True, fill='both', padx=0, pady=(0, 5))
         self.text_area.config(state=tk.DISABLED)
         self.text_area.vbar.pack_forget()
 
     def setup_top_bar(self):
         self.top_bar = tk.Frame(self.master, height=30, bg="#343740")
         self.setup_top_bar_elements()
-        self.top_bar.pack_forget()
+        self.top_bar.pack(side=tk.TOP, fill=tk.X)
         self.top_bar.lift()
 
     def setup_top_bar_elements(self):
-        self.label = tk.Label(self.top_bar, text="academic victim", fg="white", bg="#343740", font=("Arial", 11, "bold"))
-        self.label.pack(side=tk.LEFT, padx=5, pady=(0, 2))
-
         button_config = {
             "fg": "white",
             "activebackground": "#3b45a8",
@@ -78,7 +76,7 @@ class PopupWindow:
             "relief": tk.FLAT,
             "highlightcolor": "#4752c4",
             "highlightthickness": 0,
-            "font": ("Arial", 11, "bold"),
+            "font": ("Segoe", 11, "bold"),
             "takefocus": 0
         }
 
@@ -97,12 +95,18 @@ class PopupWindow:
             toggle_button_config["height"] = 1
             button_config["bg"] = "#4752c4"
 
-        # Create all buttons
+        # Create tooltip frame
+        self.tooltip = tk.Label(self.master, bg="#343740", fg="white", font=("Segoe", 10),
+                               relief=tk.SOLID, borderwidth=1)
+
+        # Create all buttons with tooltips
         if platform.system() == "Darwin":
             self.context_button = Button_class(self.top_bar, text="CTX", command=self.toggle_context_button, 
                                              background="#ff4444", **toggle_button_config)
             self.history_button = Button_class(self.top_bar, text="HST", command=self.toggle_history_button,
                                              background="#44ff44", **toggle_button_config)
+            self.clipboard_button = Button_class(self.top_bar, text="CLB", command=self.toggle_clipboard_button,
+                                               background="#ff4444", **toggle_button_config)
             self.wipe_history_button = Button_class(self.top_bar, text="WH", command=self.wipe_history_button,
                                                   background="#4752c4", **toggle_button_config)
             self.wipe_context_button = Button_class(self.top_bar, text="WC", command=self.wipe_context_button,
@@ -116,6 +120,8 @@ class PopupWindow:
                                              bg="#ff4444", **toggle_button_config)
             self.history_button = Button_class(self.top_bar, text="HST", command=self.toggle_history_button,
                                              bg="#44ff44", **toggle_button_config)
+            self.clipboard_button = Button_class(self.top_bar, text="CLB", command=self.toggle_clipboard_button,
+                                               bg="#ff4444", **toggle_button_config)
             self.wipe_history_button = Button_class(self.top_bar, text="WH", command=self.wipe_history_button,
                                                   bg="#4752c4", **toggle_button_config)
             self.wipe_context_button = Button_class(self.top_bar, text="WC", command=self.wipe_context_button,
@@ -125,6 +131,7 @@ class PopupWindow:
             self.copy_button = Button_class(self.top_bar, text="C", command=self.copy_last_response, 
                                           width=30, **button_config)
         
+        # Create model button
         self.model_options = [
             "o1-preview", 
             "o1-mini",
@@ -142,11 +149,111 @@ class PopupWindow:
             self.model_button = Button_class(self.top_bar, text=model_text, command=self.cycle_model, 
                                            width=len(model_text), **button_config)
 
-        # Pack buttons in reverse order
-        for button in [self.close_button, self.copy_button, self.context_button, 
-                      self.history_button, self.wipe_history_button, self.wipe_context_button, 
-                      self.model_button]:
+        # Pack model button on the left
+        self.model_button.pack(side=tk.LEFT, padx=(5,1), pady=(0, 2))
+
+        # Pack other buttons on the right
+        for button, tooltip_text in [
+            (self.close_button, "Close application"),
+            (self.copy_button, "Copy last response to clipboard"),
+            (self.context_button, "Toggle OCR context inclusion, Ctrl+Alt+5"),
+            (self.history_button, "Toggle chat history, Ctrl+Alt+7"),
+            (self.clipboard_button, "Toggle clipboard monitoring"),
+            (self.wipe_history_button, "Wipe chat history, Ctrl+Alt+8"),
+            (self.wipe_context_button, "Wipe OCR context, Ctrl+Alt+9")
+        ]:
             button.pack(side=tk.RIGHT, padx=(0,1), pady=(0, 2))
+            self.add_tooltip(button, tooltip_text)
+
+        # Add tooltip for model button
+        self.add_tooltip(self.model_button, "Cycle through available models")
+
+    def setup_input_bar(self):
+        """Setup the bottom input bar with text entry"""
+        self.input_bar = tk.Frame(self.master, height=40, bg="#343740")
+        self.input_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        # Create and configure the text entry with StringVar
+        self.input_var = tk.StringVar()
+        self.input_entry = tk.Entry(
+            self.input_bar,
+            textvariable=self.input_var,
+            font=("Segoe", 12),
+            bg="#1e1f22",
+            fg="white",
+            insertbackground="white",
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground="#4752c4",
+            highlightcolor="#4752c4"
+        )
+        self.input_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
+        
+        # Ensure the entry is enabled and can receive focus
+        self.input_entry.config(state='normal')
+        
+        # Create send button
+        button_config = {
+            "fg": "white",
+            "activebackground": "#3b45a8",
+            "activeforeground": "white",
+            "font": ("Segoe", 11, "bold"),
+            "takefocus": 0,
+            "width": 30
+        }
+        
+        if platform.system() == "Darwin":
+            button_config["borderless"] = False
+            Button_class = Button
+            self.send_button = Button_class(
+                self.input_bar, 
+                text="Send", 
+                command=self.send_message,
+                background="#4752c4",
+                height=25,
+                **button_config
+            )
+        else:
+            Button_class = tk.Button
+            button_config["height"] = 1
+            button_config["bg"] = "#4752c4"
+            self.send_button = Button_class(
+                self.input_bar, 
+                text="Send",
+                command=self.send_message,
+                **button_config
+            )
+        
+        self.send_button.pack(side=tk.RIGHT, padx=5, pady=5)
+        
+        # Bind Enter key to send message
+        self.input_entry.bind("<Return>", lambda e: self.send_message())
+        
+        # Force focus to the entry widget after a short delay
+        self.master.after(100, lambda: self.input_entry.focus_force())
+
+    def send_message(self):
+        """Handle sending messages from the input bar"""
+        message = self.input_var.get().strip()
+        if message:
+            self.display_message("Processing input...\n")
+            
+            # Create an async task to process the message
+            async def process_message():
+                current_model = self.model_options[self.current_model_index]
+                if current_model.startswith("o1-"):
+                    async for response_chunk in orion_response(prompt=message, model=current_model):
+                        self.master.after(0, lambda c=response_chunk: self.update_text(c))
+                else:
+                    async for response_chunk in stream_gpt4_response(prompt=message, model=current_model):
+                        self.master.after(0, lambda c=response_chunk: self.update_text(c))
+                
+                self.master.after(0, lambda: self.update_text("\n\n"))
+                
+            asyncio.run_coroutine_threadsafe(process_message(), self.loop)
+            
+            # Clear the input field
+            self.input_var.set("")
 
     def initialize_state(self):
         self.offset_x = self.offset_y = 0
@@ -238,25 +345,6 @@ class PopupWindow:
 
     def stop_move(self, event):
         self.is_dragging = False
-
-    def check_mouse_position(self):
-        x, y = self.master.winfo_pointerx(), self.master.winfo_pointery()
-        window_x, window_y = self.master.winfo_rootx(), self.master.winfo_rooty()
-        window_width, window_height = self.master.winfo_width(), self.master.winfo_height()
-
-        if window_x <= x <= window_x + window_width and window_y <= y <= window_y + window_height:
-            self.show_top_bar()
-        else:
-            self.hide_top_bar()
-
-        self.master.after(100, self.check_mouse_position)
-
-    def show_top_bar(self):
-        self.top_bar.pack(side=tk.TOP, fill=tk.X)
-        self.top_bar.lift()
-
-    def hide_top_bar(self):
-        self.top_bar.pack_forget()
 
     def on_key_press(self, key):
         try:
@@ -495,31 +583,55 @@ class PopupWindow:
             self.wipe_context_button.configure(bg="#ff4444")
             self.master.after(200, lambda: self.wipe_context_button.configure(bg="#4752c4"))
 
+    def toggle_clipboard_button(self):
+        """Toggle clipboard checking on/off"""
+        self.clipboard_enabled = not getattr(self, 'clipboard_enabled', False)
+        if platform.system() == "Darwin":
+            self.clipboard_button.configure(background="#44ff44" if self.clipboard_enabled else "#ff4444")
+        else:
+            self.clipboard_button.configure(bg="#44ff44" if self.clipboard_enabled else "#ff4444")
+        self.display_message(f"Clipboard checking {'enabled' if self.clipboard_enabled else 'disabled'}.\n\n")
+
+    def add_tooltip(self, widget, text):
+        """Add tooltip to a widget"""
+        def show_tooltip(event):
+            self.tooltip.configure(text=text)
+            # Use widget dimensions instead of insert cursor
+            x = widget.winfo_rootx() + widget.winfo_width() // 2
+            y = widget.winfo_rooty() + widget.winfo_height()
+            
+            # Adjust position to not cover the button
+            self.tooltip.place(x=x, y=y)
+
+        def hide_tooltip(event):
+            self.tooltip.place_forget()
+
+        widget.bind('<Enter>', show_tooltip)
+        widget.bind('<Leave>', hide_tooltip)
+
 async def check_clipboard(popup):
     last_clipboard = pyperclip.paste()
     while True:
         try:
-            current_clipboard = pyperclip.paste()
-            if current_clipboard != last_clipboard and current_clipboard != popup.ignore_clipboard:
-                print(f"New clipboard content detected: {current_clipboard[:50]}...")
-                print(f"Ignored content: {popup.ignore_clipboard[:50]}...")
-                popup.display_message("Processing new clipboard content...\n")
-                
-                # Choose the appropriate method based on the model
-                current_model = popup.model_options[popup.current_model_index]
-                if current_model.startswith("o1-"):
-                    # Use orion_response for o1 models
-                    async for response_chunk in orion_response(prompt=current_clipboard, model=current_model):
-                        popup.update_text(response_chunk)
-                else:
-                    # Use stream_gpt4_response for other models
-                    async for response_chunk in stream_gpt4_response(prompt=current_clipboard, model=current_model):
-                        popup.update_text(response_chunk)
-                        await asyncio.sleep(0.01)
-                        
-                popup.update_text("\n\n")
-                last_clipboard = current_clipboard
-            popup.ignore_clipboard = ""
+            if getattr(popup, 'clipboard_enabled', False):  # Only check if enabled
+                current_clipboard = pyperclip.paste()
+                if current_clipboard != last_clipboard and current_clipboard != popup.ignore_clipboard:
+                    print(f"New clipboard content detected: {current_clipboard[:50]}...")
+                    print(f"Ignored content: {popup.ignore_clipboard[:50]}...")
+                    popup.display_message("Processing new clipboard content...\n")
+                    
+                    current_model = popup.model_options[popup.current_model_index]
+                    if current_model.startswith("o1-"):
+                        async for response_chunk in orion_response(prompt=current_clipboard, model=current_model):
+                            popup.update_text(response_chunk)
+                    else:
+                        async for response_chunk in stream_gpt4_response(prompt=current_clipboard, model=current_model):
+                            popup.update_text(response_chunk)
+                            await asyncio.sleep(0.01)
+                            
+                    popup.update_text("\n\n")
+                    last_clipboard = current_clipboard
+                popup.ignore_clipboard = ""
         except Exception as e:
             print(f"Error in check_clipboard: {e}")
         await asyncio.sleep(0.5)
