@@ -1,72 +1,148 @@
 import base64
 import os
+import json
 from openai import AsyncOpenAI
 from PIL import Image
 import platform
 from io import BytesIO
-# Load API key from the hidden .academic_victim file
+
+formatted_text = ""
+INCLUDE_CONTEXT = False
+ENABLE_CHAT_HISTORY = True  # New variable for chat history toggle
+CHAT_HISTORY_FILE = "chat_history.json"
+
+def load_chat_history():
+    """Load chat history from JSON file"""
+    try:
+        if os.path.exists(CHAT_HISTORY_FILE):
+            with open(CHAT_HISTORY_FILE, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error loading chat history: {e}")
+    
+    # Return default history if file doesn't exist or has error
+    return {
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Your job is to answer difficult coding questions. Output all answers in python, unless said otherwise."
+                    }
+                ]
+            }
+        ]
+    }
+
+def save_chat_history(messages):
+    """Save chat history to JSON file"""
+    try:
+        with open(CHAT_HISTORY_FILE, 'w') as f:
+            json.dump({"messages": messages}, f, indent=2)
+    except Exception as e:
+        print(f"Error saving chat history: {e}")
+
+def append_to_history(role, content):
+    """Append a new message to chat history if enabled"""
+    if not ENABLE_CHAT_HISTORY:
+        return
+        
+    history = load_chat_history()
+    history["messages"].append({
+        "role": role,
+        "content": [
+            {
+                "type": "text",
+                "text": content
+            }
+        ]
+    })
+    save_chat_history(history["messages"])
+
 def load_api_key():
-    if platform.system() == "Darwin":  # macOS
-        config_file = os.path.expanduser("~/.academic_victim")
-    elif platform.system() == "Windows":
-        config_file = os.path.join(os.environ["USERPROFILE"], ".academic_victim")
-    else:
-        config_file = ".academic_victim"  # Fallback to current directory for other OS
+    config_file = os.path.expanduser("~/.academic_victim") if platform.system() == "Darwin" else \
+                 os.path.join(os.environ["USERPROFILE"], ".academic_victim") if platform.system() == "Windows" else \
+                 ".academic_victim"
     
     if os.path.exists(config_file):
         with open(config_file, "r") as f:
             for line in f:
                 if line.startswith("OPENAI_API_KEY="):
                     api_key = line.split("=")[1].strip()
-                    if api_key and api_key.startswith("sk-"):
-                        return api_key
+                    return api_key if api_key.startswith("sk-") else None
     return None
 
+def clear_formatted_text():
+    global formatted_text
+    formatted_text = ""
+
+def process_image(image):
+    buffer = BytesIO()
+    image.save(buffer, format="JPEG")
+    return base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+def toggle_context():
+    global INCLUDE_CONTEXT
+    INCLUDE_CONTEXT = not INCLUDE_CONTEXT
+    return INCLUDE_CONTEXT
+
+def reset_chat_history():
+    """Reset chat history and return number of messages deleted"""
+    try:
+        if os.path.exists(CHAT_HISTORY_FILE):
+            with open(CHAT_HISTORY_FILE, 'r') as f:
+                old_history = json.load(f)
+                num_messages = len(old_history.get("messages", [])) - 1  # Subtract 1 to exclude system message
+        else:
+            num_messages = 0
+
+        # Create new history with just the system message
+        new_history = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": "Your job is to answer difficult coding questions. Output all answers in python, unless said otherwise."
+                        }
+                    ]
+                }
+            ]
+        }
+        
+        # Save new history
+        with open(CHAT_HISTORY_FILE, 'w') as f:
+            json.dump(new_history, f, indent=2)
+            
+        return num_messages
+    except Exception as e:
+        print(f"Error resetting chat history: {e}")
+        return 0
+
+def toggle_chat_history():
+    """Toggle whether messages are saved to chat history"""
+    global ENABLE_CHAT_HISTORY
+    ENABLE_CHAT_HISTORY = not ENABLE_CHAT_HISTORY
+    return ENABLE_CHAT_HISTORY
+
 api_key = load_api_key()
-
-if api_key:
-    api_key = api_key.strip()  # Strip any extra spaces or newlines
-    print(f"API Key loaded: {api_key[:5]}...")  # Debugging: Print the first few characters of the API key
-    client = AsyncOpenAI(api_key=api_key)
-else:
-    print("Error: OPENAI_API_KEY not found in environment variables.")  # Debugging: Check if API key is loaded
-    client = None  # Set client to None if no API key is found
-
-# Add at the top with other global variables
-formatted_text = ""
+client = AsyncOpenAI(api_key=api_key.strip()) if api_key else None
 
 async def image_ocr(image):
-    """OCR function that processes images and saves the text to a global variable."""
     global formatted_text
-    
     if not client:
         return
         
     try:
-        # Create a BytesIO buffer to hold the image data
-        buffer = BytesIO()
-        
-        # Save the image to the buffer
-        image.save(buffer, format="JPEG")
-        
-        # Get the byte data from the buffer
-        image_bytes = buffer.getvalue()
-        
-        # Encode the byte data to base64
-        base64_string = base64.b64encode(image_bytes).decode('utf-8')
-        
-        # Send the image to the AI with OCR-specific prompt
+        base64_string = process_image(image)
         stream = await client.chat.completions.create(
             model="chatgpt-4o-latest",
             messages=[
                 {
                     "role": "system",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Your job is to act as a image to text OCR. You are provided an image that displays instructions, code, etc. Output ONLY what is in the image, nothing else. You can format it, if it is code blocks you can use markdown."
-                        }
-                    ]
+                    "content": [{"type": "text", "text": "Your job is to act as a image to text OCR. You are provided an image that displays instructions, code, etc. Output ONLY what is in the image, nothing else. You can format it, if it is code blocks you can use markdown."}]
                 },
                 {
                     "role": "user",
@@ -82,109 +158,139 @@ async def image_ocr(image):
             top_p=1,
             frequency_penalty=0,
             presence_penalty=0,
-            response_format={
-                "type": "text"
-            }
+            response_format={"type": "text"}
         )
         
-        # Collect the response and append to formatted_text
         response_text = ""
         async for chunk in stream:
             if chunk.choices[0].delta.content is not None:
                 response_text += chunk.choices[0].delta.content
+                yield chunk.choices[0].delta.content
         
         formatted_text += response_text + "\n\n"
         
     except Exception as e:
-        print(f"Error in OCR processing: {e}")
+        yield f"Error in OCR processing: {e}"
 
-async def stream_gpt4_response(prompt=None, image=None, model="gpt-4o-mini"):
+async def orion_response(prompt=None, image=None, model="o1-mini"):
+    """Specialized method for Orion models following their specific guidelines"""
     if not client:
         yield "Error: No API key found. Please provide a valid OpenAI API key."
         return
 
     try:
+        history = load_chat_history()
+        messages = history["messages"]
+
+        # Add context if enabled and exists
+        if INCLUDE_CONTEXT and formatted_text:
+            messages.append({
+                "role": "user",
+                "content": [{"type": "text", "text": f"Here is the full text of the problem:\n{formatted_text}"}]
+            })
+
         if image:
-            # Create a BytesIO buffer to hold the image data
-            buffer = BytesIO()
-
-            # Save the image to the buffer in a specific format (e.g., PNG)
-            image.save(buffer, format="JPEG")
-
-            # Get the byte data from the buffer
-            image_bytes = buffer.getvalue()
-
-            # Encode the byte data to base64
-            base64_string = base64.b64encode(image_bytes).decode('utf-8')
-            
-            # Send the image to the AI
-            stream = await client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": [
-                            {
-                            "type": "text",
-                            "text": "When provided with a quiz question, determine the answer. If the question appears straightforward or simple, respond quickly. If it seems complex or difficult, take additional time to think through the answer thoroughly.\n\n# Steps\n\n1. **Assess the Question**: Quickly read through the question to understand its complexity.\n2. **Determine Complexity**:\n   - If the question is **easy**, rely on basic knowledge or obvious solutions to answer promptly.\n   - If the question is **hard**, analyze the components, consider various possibilities, and apply logical reasoning.\n3. **Generate Answer**:\n   - Apply relevant knowledge or logic to formulate an answer based on your assessment.\n4. **Reflect**: Briefly review the reasoning and ensure the answer aligns with the complexity of the question.\n\n# Output Format\n\n- Provide a short, concise answer. If complex reasoning is involved, briefly summarize the thought process leading to the answer.\n\n# Examples\n\n**Example 1: Easy Question**\n- **Input**: What is 2 + 2?\n- **Output**: 4\n\n**Example 2: Hard Question**\n- **Input**: Analyze the impact of World War I on the global political landscape.\n- **Output**: The impact of World War I on the global political landscape includes the redrawing of national borders, the establishment of the League of Nations, and significant shifts in political power, particularly leading to the fall of empires like Austro-Hungarian and Ottoman, contributing to the rise of new ideologies and tensions leading to World War II.\n\n# Notes\n\n- Prioritize clarity and accuracy in your answers.\n- Consider the context of the quiz, as it might provide clues to answer complex questions effectively."
-                            }
-                    ]
-                    },
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "Here an image of the question. Read and understand the image, then solve the question."},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_string}"}}
-                        ]
-                    }
-                ],
-                stream=True,
-                temperature=0.1,
-                max_tokens=16383,
-                top_p=1,
-                frequency_penalty=0,
-                presence_penalty=0,
-                response_format={
-                    "type": "text"
-                }
-            )
+            base64_string = process_image(image)
+            messages.append({
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Analyze this image and provide a clear, accurate answer."},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_string}"}}
+                ]
+            })
         else:
-            # Handle text prompt
-            stream = await client.chat.completions.create(
-                model=model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": [
-                        {
-                            "type": "text",
-                            "text": "When provided with a quiz question, determine the answer. If the question appears straightforward or simple, respond quickly. If it seems complex or difficult, take additional time to think through the answer thoroughly.\n\n# Steps\n\n1. Assess the Question: Quickly read through the question to understand its complexity.\n2. Determine Complexity:\n   - If the question is easy, rely on basic knowledge or obvious solutions to answer promptly.\n   - If the question is hard, analyze the components, consider various possibilities, and apply logical reasoning.\n3. Generate Answer:\n   - Apply relevant knowledge or logic to formulate an answer based on your assessment.\n4. Reflect: Briefly review the reasoning and ensure the answer aligns with the complexity of the question.\n\n# Output Format\n\n- Provide a short, concise answer. If complex reasoning is involved, briefly summarize the thought process leading to the answer.\n\n# Examples\n\nExample 1: Easy Question\n- Input: What is 2 + 2?\n- Output: 4\n\nExample 2: Hard Question\n- Input: Analyze the impact of World War I on the global political landscape.\n- Output: The impact of World War I on the global political landscape includes the redrawing of national borders, the establishment of the League of Nations, and significant shifts in political power, particularly leading to the fall of empires like Austro-Hungarian and Ottoman, contributing to the rise of new ideologies and tensions leading to World War II.\n\n# Notes\n\n- Prioritize clarity and accuracy in your answers.\n- Consider the context of the quiz, as it might provide clues to answer complex questions effectively."
-                        }
-                        ]
-                    },
-                    {
-                        "role": "user", 
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            }
-                        ]
-                    }
-                ],
-                stream=True,
-                temperature=0.1,
-                max_tokens=16383,
-                top_p=1,
-                frequency_penalty=0,
-                presence_penalty=0,
-                response_format={
-                    "type": "text"
-                }
-            )
+            # If context is enabled, include it with the prompt
+            if INCLUDE_CONTEXT and formatted_text:
+                full_prompt = f"Here is the full text of the coding question:\n{formatted_text}\n\nUser question:\n{prompt}"
+            else:
+                full_prompt = prompt
+                
+            messages.append({
+                "role": "user",
+                "content": [{"type": "text", "text": full_prompt}]
+            })
+
+        # Non-streaming call for Orion models
+        response = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            response_format={"type": "text"}
+        )
+
+        response_content = response.choices[0].message.content
+        
+        # Save both the user's prompt and the assistant's response
+        if prompt:
+            append_to_history("user", full_prompt if INCLUDE_CONTEXT and formatted_text else prompt)
+        append_to_history("assistant", response_content)
+        
+        yield response_content
+
+    except Exception as e:
+        yield f"Error: {e}"
+
+async def stream_gpt4_response(prompt=None, image=None, model="gpt-4o-mini"):
+    """Original method for non-Orion models"""
+    if not client:
+        yield "Error: No API key found. Please provide a valid OpenAI API key."
+        return
+
+    try:
+        history = load_chat_history()
+        messages = history["messages"]
+
+        # Add context if enabled and exists
+        if INCLUDE_CONTEXT and formatted_text:
+            messages.append({
+                "role": "user",
+                "content": [{"type": "text", "text": f"Here is the entire coding problem: \n{formatted_text}"}]
+            })
+
+        if image:
+            base64_string = process_image(image)
+            messages.append({
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Here an image of the question. Read and understand the image, then solve the question."},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_string}"}}
+                ]
+            })
+        else:
+            # If context is enabled, include it with the prompt
+            if INCLUDE_CONTEXT and formatted_text:
+                full_prompt = f"Here is full text of the coding question:\n{formatted_text}\n\nUser question:\n{prompt}"
+            else:
+                full_prompt = prompt
+                
+            messages.append({
+                "role": "user",
+                "content": [{"type": "text", "text": full_prompt}]
+            })
+
+        stream = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=True,
+            temperature=0.1,
+            max_tokens=16383,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0,
+            response_format={"type": "text"}
+        )
+
+        full_response = ""
+        if prompt:
+            append_to_history("user", full_prompt if INCLUDE_CONTEXT and formatted_text else prompt)
 
         async for chunk in stream:
             if chunk.choices[0].delta.content is not None:
-                yield chunk.choices[0].delta.content
+                content = chunk.choices[0].delta.content
+                full_response += content
+                yield content
+
+        # Save the complete response after streaming
+        append_to_history("assistant", full_response)
+
     except Exception as e:
         yield f"Error: {e}"
