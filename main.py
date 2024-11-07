@@ -18,6 +18,7 @@ class PopupWindow:
         self.master = master
         self.loop = loop
         self.key_event_queue = Queue()
+        self.clipboard_enabled = True  # Set initial clipboard state to True
         self.setup_window()
         self.setup_top_bar()
         self.setup_text_area()
@@ -33,8 +34,17 @@ class PopupWindow:
         self.master.config(bg="#1e1f22")
         self.setup_icon()
         self.master.overrideredirect(True)
-        self.master.attributes("-alpha", 0.9, "-topmost", True)
-        self.master.geometry("400x800+100+100")
+        self.master.attributes("-alpha", 0.05, "-topmost", True)
+        self.master.geometry("500x500+100+100")
+        
+        # Initialize fade animation variables
+        self.fade_after_id = None
+        self.current_alpha = 0.05
+        self.target_alpha = 0.05
+        
+        # Bind mouse enter/leave for the entire window
+        self.master.bind("<Enter>", self.on_window_enter)
+        self.master.bind("<Leave>", self.on_window_leave)
 
     def setup_icon(self):
         if platform.system() == "Darwin":
@@ -104,9 +114,9 @@ class PopupWindow:
             self.context_button = Button_class(self.top_bar, text="CTX", command=self.toggle_context_button, 
                                              background="#ff4444", **toggle_button_config)
             self.history_button = Button_class(self.top_bar, text="HST", command=self.toggle_history_button,
-                                             background="#44ff44", **toggle_button_config)
+                                             background="#ff4444", **toggle_button_config)
             self.clipboard_button = Button_class(self.top_bar, text="CLB", command=self.toggle_clipboard_button,
-                                               background="#ff4444", **toggle_button_config)
+                                               background="#44ff44", **toggle_button_config)
             self.wipe_history_button = Button_class(self.top_bar, text="WH", command=self.wipe_history_button,
                                                   background="#4752c4", **toggle_button_config)
             self.wipe_context_button = Button_class(self.top_bar, text="WC", command=self.wipe_context_button,
@@ -119,9 +129,9 @@ class PopupWindow:
             self.context_button = Button_class(self.top_bar, text="CTX", command=self.toggle_context_button, 
                                              bg="#ff4444", **toggle_button_config)
             self.history_button = Button_class(self.top_bar, text="HST", command=self.toggle_history_button,
-                                             bg="#44ff44", **toggle_button_config)
+                                             bg="#ff4444", **toggle_button_config)
             self.clipboard_button = Button_class(self.top_bar, text="CLB", command=self.toggle_clipboard_button,
-                                               bg="#ff4444", **toggle_button_config)
+                                               bg="#44ff44", **toggle_button_config)
             self.wipe_history_button = Button_class(self.top_bar, text="WH", command=self.wipe_history_button,
                                                   bg="#4752c4", **toggle_button_config)
             self.wipe_context_button = Button_class(self.top_bar, text="WC", command=self.wipe_context_button,
@@ -139,7 +149,7 @@ class PopupWindow:
             "chatgpt-4o-latest",
             "gpt-4o"
         ]
-        self.current_model_index = 1
+        self.current_model_index = 3
         model_text = f"Model: {self.model_options[self.current_model_index]}"
         
         if platform.system() == "Darwin":
@@ -189,17 +199,14 @@ class PopupWindow:
         )
         self.input_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
         
-        # Ensure the entry is enabled and can receive focus
-        self.input_entry.config(state='normal')
-        
-        # Create send button
+        # Create send button with larger width
         button_config = {
             "fg": "white",
             "activebackground": "#3b45a8",
             "activeforeground": "white",
             "font": ("Segoe", 11, "bold"),
             "takefocus": 0,
-            "width": 30
+            "width": 60  # Increased width
         }
         
         if platform.system() == "Darwin":
@@ -608,6 +615,45 @@ class PopupWindow:
 
         widget.bind('<Enter>', show_tooltip)
         widget.bind('<Leave>', hide_tooltip)
+
+    def on_window_enter(self, event):
+        """When mouse enters window"""
+        self.target_alpha = 0.5  # Set target to 50% opacity
+        if not self.fade_after_id:
+            self.fade_animation()
+        self.text_area.pack(expand=True, fill='both', padx=0, pady=(0, 5))
+        self.top_bar.pack(side=tk.TOP, fill=tk.X)
+        self.input_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def on_window_leave(self, event):
+        """When mouse leaves window"""
+        x, y = self.master.winfo_pointerxy()
+        widget_under_mouse = self.master.winfo_containing(x, y)
+        if not widget_under_mouse or not self.is_child_of(widget_under_mouse, self.master):
+            self.target_alpha = 0.05  # Set target to 5% opacity
+            if not self.fade_after_id:
+                self.fade_animation()
+
+    def is_child_of(self, widget, parent):
+        """Check if widget is a child of parent"""
+        while widget:
+            if widget == parent:
+                return True
+            widget = widget.master
+        return False
+
+    def fade_animation(self):
+        """Smoothly animate opacity changes"""
+        if abs(self.current_alpha - self.target_alpha) < 0.01:
+            self.current_alpha = self.target_alpha
+            self.master.attributes("-alpha", self.current_alpha)
+            self.fade_after_id = None
+            return
+        
+        # Interpolate towards target
+        self.current_alpha += (self.target_alpha - self.current_alpha) * 0.2
+        self.master.attributes("-alpha", self.current_alpha)
+        self.fade_after_id = self.master.after(10, self.fade_animation)
 
 async def check_clipboard(popup):
     last_clipboard = pyperclip.paste()

@@ -8,8 +8,9 @@ from io import BytesIO
 
 formatted_text = ""
 INCLUDE_CONTEXT = False
-ENABLE_CHAT_HISTORY = True  # New variable for chat history toggle
+ENABLE_CHAT_HISTORY = False  # Changed from True to False
 CHAT_HISTORY_FILE = "chat_history.json"
+ENABLE_CLIPBOARD = True  # New global variable
 
 def load_chat_history():
     """Load chat history from JSON file"""
