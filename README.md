@@ -2,6 +2,7 @@
 
 # academic victim
 
+This application is made to help students study.
 this is a python app that extracts questions from clipboard text or images, then uses OpenAI models like gpt-4o to provide answers in a simple pop-up window.   
 
 ## Installation
