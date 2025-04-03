@@ -5,6 +5,10 @@ from openai import AsyncOpenAI
 from PIL import Image
 import platform
 from io import BytesIO
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 formatted_text = ""
 INCLUDE_CONTEXT = False
@@ -62,6 +66,12 @@ def append_to_history(role, content):
     save_chat_history(history["messages"])
 
 def load_api_key():
+    # First try to load from .env file in current directory
+    api_key = os.getenv("OPENAI_API_KEY")
+    if api_key and api_key.startswith("sk-"):
+        return api_key
+        
+    # Fallback to legacy config file
     config_file = os.path.expanduser("~/.academic_victim") if platform.system() == "Darwin" else \
                  os.path.join(os.environ["USERPROFILE"], ".academic_victim") if platform.system() == "Windows" else \
                  ".academic_victim"
@@ -173,8 +183,8 @@ async def image_ocr(image):
     except Exception as e:
         yield f"Error in OCR processing: {e}"
 
-async def orion_response(prompt=None, image=None, model="o1-mini"):
-    """Specialized method for Orion models following their specific guidelines"""
+async def orion_response(prompt=None, image=None, model="o1"):
+    """Specialized method for reasoning models (o1 and o3-mini)"""
     if not client:
         yield "Error: No API key found. Please provide a valid OpenAI API key."
         return
@@ -211,14 +221,23 @@ async def orion_response(prompt=None, image=None, model="o1-mini"):
                 "content": [{"type": "text", "text": full_prompt}]
             })
 
-        # Non-streaming call for Orion models
+        # Call for reasoning models (o1 and o3-mini)
         response = await client.chat.completions.create(
             model=model,
             messages=messages,
+            reasoning_effort="medium",  # Can be "low", "medium", or "high"
+            max_completion_tokens=8000,  # Reserve space for reasoning and output
+            temperature=0.1,
+            top_p=1,
             response_format={"type": "text"}
         )
 
         response_content = response.choices[0].message.content
+        
+        # Log token usage for reasoning models if available
+        if hasattr(response, 'usage') and hasattr(response.usage, 'completion_tokens_details'):
+            reasoning_tokens = response.usage.completion_tokens_details.reasoning_tokens
+            print(f"Used {reasoning_tokens} reasoning tokens")
         
         # Save both the user's prompt and the assistant's response
         if prompt:
@@ -230,7 +249,8 @@ async def orion_response(prompt=None, image=None, model="o1-mini"):
     except Exception as e:
         yield f"Error: {e}"
 
-async def stream_gpt4_response(prompt=None, image=None, model="gpt-4o-mini"):
+
+async def stream_gpt4_response(prompt=None, image=None, model="chatgpt-4o-latest"):
     """Original method for non-Orion models"""
     if not client:
         yield "Error: No API key found. Please provide a valid OpenAI API key."

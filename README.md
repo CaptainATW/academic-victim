@@ -10,7 +10,29 @@ this is a python app that extracts questions from clipboard text or images, then
 To install this project, you need to clone or download the repository. Unlike traditional executables, you will need to run the project from source.
 
 ### Requirements
-- You **will need an OpenAI API key** if you want to utilize GPT-4o, or other OpenAI GPT models.
+- You **will need an OpenAI API key** if you want to utilize GPT-4o, o1, o3-mini or other OpenAI models.
+
+### Setting up your API key
+
+You can set up your OpenAI API key in two ways:
+
+1. Create a `.env` file in the project root directory with the following content:
+   ```
+   OPENAI_API_KEY=sk-your-api-key-here
+   ```
+   Replace `sk-your-api-key-here` with your actual OpenAI API key.
+
+2. Alternatively, the app will look for your API key in `~/.academic_victim` as a fallback.
+
+### Available Models
+
+The app supports the following models:
+- **o1**: OpenAI's advanced reasoning model for complex tasks
+- **o3-mini**: Smaller, faster reasoning model with good performance
+- **chatgpt-4o-latest**: Latest ChatGPT model with vision capabilities
+- And more...
+
+You can switch between models using the model selector in the top bar.
 
 ### Installation via GitHub Desktop and VSCode
 

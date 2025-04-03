@@ -33,14 +33,33 @@ class PopupWindow:
         self.master.title("academic victim")
         self.master.config(bg="#1e1f22")
         self.setup_icon()
+        
+        # Make the window completely borderless
         self.master.overrideredirect(True)
-        self.master.attributes("-alpha", 0.05, "-topmost", True)
+        
+        # On macOS, additional styling for a cleaner look
+        if platform.system() == "Darwin":
+            try:
+                # Hide the standard title bar and make the window borderless
+                self.master.tk.call('::tk::unsupported::MacWindowStyle',
+                                   'style', self.master._w, 'plain', 'none')
+                
+                # Remove shadows and borders
+                self.master.wm_attributes("-transparent", True)
+            except Exception as e:
+                print(f"Error styling macOS window: {e}")
+            
+        self.master.attributes("-alpha", 0.3, "-topmost", True)
         self.master.geometry("500x500+100+100")
+        
+        # Create a custom window appearance
+        if platform.system() == "Darwin":
+            self.style_rounded_window()
         
         # Initialize fade animation variables
         self.fade_after_id = None
-        self.current_alpha = 0.05
-        self.target_alpha = 0.05
+        self.current_alpha = 0.3
+        self.target_alpha = 0.3
         
         # Bind mouse enter/leave for the entire window
         self.master.bind("<Enter>", self.on_window_enter)
@@ -56,26 +75,46 @@ class PopupWindow:
             self.master.iconbitmap("icon.ico")
 
     def setup_text_area(self):
+        # Get custom style if available
+        text_style = getattr(self, 'text_area_style', {})
+        
+        # Default styling
+        default_style = {
+            "wrap": tk.WORD,
+            "width": 40,
+            "height": 10,
+            "font": ("Segoe", 14),
+            "fg": "white",
+            "bg": "#1e1f22",
+            "bd": 0,
+            "highlightthickness": 0
+        }
+        
+        # Merge default and custom styles
+        style = {**default_style, **text_style}
+        
         self.text_area = scrolledtext.ScrolledText(
             self.master,
-            wrap=tk.WORD,
-            width=40,
-            height=10,
-            font=("Segoe", 14),
-            fg="white",
-            bg="#1e1f22",
-            bd=0,
-            highlightthickness=0
+            **style
         )
         self.text_area.pack(expand=True, fill='both', padx=0, pady=(0, 5))
         self.text_area.config(state=tk.DISABLED)
         self.text_area.vbar.pack_forget()
 
     def setup_top_bar(self):
-        self.top_bar = tk.Frame(self.master, height=30, bg="#343740")
+        """Setup the top control bar that contains buttons"""
+        self.top_bar = tk.Frame(self.master, height=30, bg=getattr(self, 'top_bar_color', "#343740"))
         self.setup_top_bar_elements()
+        
+        # Place top bar at the top of the window but make it part of the main UI
+        # instead of the OS title bar
         self.top_bar.pack(side=tk.TOP, fill=tk.X)
         self.top_bar.lift()
+        
+        # Make the top bar draggable for moving the window
+        self.top_bar.bind("<Button-1>", self.start_move)
+        self.top_bar.bind("<B1-Motion>", self.do_move)
+        self.top_bar.bind("<ButtonRelease-1>", self.stop_move)
 
     def setup_top_bar_elements(self):
         button_config = {
@@ -143,9 +182,9 @@ class PopupWindow:
         
         # Create model button
         self.model_options = [
-            "o1-preview", 
+            "o1", 
             "o1-mini",
-            "gpt-4o-mini",
+            "o3-mini",
             "chatgpt-4o-latest",
             "gpt-4o"
         ]
@@ -176,7 +215,7 @@ class PopupWindow:
             self.add_tooltip(button, tooltip_text)
 
         # Add tooltip for model button
-        self.add_tooltip(self.model_button, "Cycle through available models")
+        self.add_tooltip(self.model_button, "Cycle through available models:\no1: Advanced reasoning model for complex tasks\no3-mini: Faster reasoning model with good performance\nchatgpt-4o-latest: Latest ChatGPT model with vision")
 
     def setup_input_bar(self):
         """Setup the bottom input bar with text entry"""
@@ -277,8 +316,8 @@ class PopupWindow:
         self.keyboard_listener.start()
 
     def bind_events(self):
-        self.master.bind("<B1-Motion>", self.do_move)
-        self.master.bind("<ButtonRelease-1>", self.stop_move)
+        # Window-level events are now handled by top_bar bindings
+        pass
 
     def check_api_key(self):
         def check_api_key_exists():
@@ -618,7 +657,7 @@ class PopupWindow:
 
     def on_window_enter(self, event):
         """When mouse enters window"""
-        self.target_alpha = 0.5  # Set target to 50% opacity
+        self.target_alpha = 1  # Set target to 50% opacity
         if not self.fade_after_id:
             self.fade_animation()
         self.text_area.pack(expand=True, fill='both', padx=0, pady=(0, 5))
@@ -630,7 +669,7 @@ class PopupWindow:
         x, y = self.master.winfo_pointerxy()
         widget_under_mouse = self.master.winfo_containing(x, y)
         if not widget_under_mouse or not self.is_child_of(widget_under_mouse, self.master):
-            self.target_alpha = 0.05  # Set target to 5% opacity
+            self.target_alpha = 0.3  # Set target to 5% opacity
             if not self.fade_after_id:
                 self.fade_animation()
 
@@ -654,6 +693,34 @@ class PopupWindow:
         self.current_alpha += (self.target_alpha - self.current_alpha) * 0.2
         self.master.attributes("-alpha", self.current_alpha)
         self.fade_after_id = self.master.after(10, self.fade_animation)
+
+    def start_move(self, event):
+        """Start window dragging from the top bar"""
+        self.offset_x = self.master.winfo_x() - event.x_root
+        self.offset_y = self.master.winfo_y() - event.y_root
+        self.is_dragging = True
+
+    def style_rounded_window(self):
+        """Create a more modern borderless window appearance"""
+        # Remove any border lines
+        self.master.config(highlightbackground=self.master.cget('bg'), 
+                          highlightthickness=0)
+        
+        # Give a more modern look to the top bar
+        self.top_bar_color = "#343740"
+        
+        # Create a canvas for the smooth corner appearance
+        # This is a visual trick rather than actual rounded corners
+        background_color = self.master.cget('bg')
+        
+        # Custom styling for the text area to create a seamless look
+        self.text_area_style = {
+            "bg": background_color,
+            "highlightbackground": background_color,
+            "highlightcolor": background_color,
+            "borderwidth": 0,
+            "highlightthickness": 0
+        }
 
 async def check_clipboard(popup):
     last_clipboard = pyperclip.paste()
